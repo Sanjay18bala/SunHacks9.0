@@ -125,7 +125,7 @@ export function CoinSearch({
             input.current?.blur();
           }
         }}
-        className="h-10 w-full rounded-lg border border-line bg-panel pr-10 pl-10 text-sm text-fg outline-none placeholder:text-muted focus:border-dim focus:bg-bg"
+        className="h-10 w-full rounded-lg border border-line bg-panel pr-10 pl-10 text-sm text-fg outline-none placeholder:text-muted focus:border-fg focus:bg-bg focus-visible:outline-none"
       />
       <kbd className="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 rounded border border-line px-1.5 text-[11px] text-muted sm:block">
         /
