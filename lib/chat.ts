@@ -99,10 +99,9 @@ export function moodFor(text: string, ctx: DeskContext): ChatMood {
 export function sampleReply(question: string, ctx: DeskContext): string {
   const coins = mentionedCoins(question, ctx.coins).slice(0, 2);
   const lower = question.toLowerCase();
-  const note = "(I'm reading the desk only right now. Add an xAI key and I can check X and the news too.)";
 
   if (coins.length === 0 && /\bstocks?\b|\bshares?\b|nasdaq|s&p/.test(lower)) {
-    return `I track crypto, not stocks. Add a coin from the search bar and I'll keep an eye on it for you. ${note}`;
+    return "TickSense tracks crypto, not stocks. Add a coin from the search bar and I'll follow it for you.";
   }
 
   if (coins.length === 0 && /portfolio|holding|my book|how am i|p&l|pnl|cash/.test(lower)) {
@@ -113,8 +112,7 @@ export function sampleReply(question: string, ctx: DeskContext): string {
     );
     return [
       `You have ${usd(ctx.cash)} in cash${held.length ? ` and ${parts.join(", ")}` : " and no coins yet"}.`,
-      held.length ? `That's about ${usd(ctx.cash + worth)} in total.` : "Run a scan and I'll start trading by your rules.",
-      note,
+      held.length ? `That's about ${usd(ctx.cash + worth)} in total.` : "Run a scan and the desk will trade by your rules.",
     ].join(" ");
   }
 
@@ -131,8 +129,7 @@ export function sampleReply(question: string, ctx: DeskContext): string {
         `My strongest read is ${strongest.symbol} at ${score(strongest.signal.sentiment_score)}: ${strongest.signal.summary_catalyst}`,
       );
     }
-    lines.push("Ask me about a coin by name, like Bitcoin or SOL.");
-    lines.push(note);
+    lines.push("Ask about a specific coin for its price, 24h move, and my latest read.");
     return lines.join(" ");
   }
 
@@ -148,13 +145,12 @@ export function sampleReply(question: string, ctx: DeskContext): string {
         `My last read was ${score(coin.signal.sentiment_score)} with ${Math.round(coin.signal.confidence * 100)}% confidence: ${coin.signal.summary_catalyst}`,
       );
     } else {
-      bits.push(`I haven't read the room on ${coin.symbol} yet. Run a scan and I will.`);
+      bits.push(`There's no sentiment read on ${coin.symbol} yet. Run a scan to get one.`);
     }
     if (coin.held > 0) {
       bits.push(`You hold ${coin.held} ${coin.symbol}${coin.price != null ? `, worth ${usd(coin.held * coin.price)}` : ""}.`);
     }
     return bits.join(" ");
   });
-  lines.push(note);
   return lines.join("\n\n");
 }

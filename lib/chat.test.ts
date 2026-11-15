@@ -52,7 +52,7 @@ test("offline answers use desk numbers and stay on crypto", () => {
   assert.match(btc, /Bitcoin is at \$64,000\.00, −3\.50% in 24 hours/);
   assert.match(btc, /−0\.84 with 90% confidence/);
   assert.match(btc, /You hold 0\.02 BTC/);
-  assert.match(sampleReply("what about tesla stock", desk), /crypto, not stocks/);
+  assert.match(sampleReply("what about tesla stock", desk), /tracks crypto, not stocks/);
   assert.match(sampleReply("how is my portfolio", desk), /\$2,500\.00 in cash/);
   assert.match(deskBrief(desk), /SOL \(Solana\); price \$70\.00; 24h \+4\.20%; no read yet/);
 });
