@@ -1,9 +1,11 @@
 import { analyzeTicker } from "@/lib/grok";
 import { getPortfolio, listWatchlist, recordSignal } from "@/lib/repository";
+import { assertDurableBook } from "@/lib/supabase";
 import { parseStrategy, parseTickers } from "@/lib/trading";
 import type { ScanResponse, ScanTickerResult, SentimentSource } from "@/types/database";
 
 export async function runScan(input: unknown): Promise<ScanResponse> {
+  assertDurableBook();
   const watchlist = await listWatchlist();
   const tickers = parseTickers(
     input,

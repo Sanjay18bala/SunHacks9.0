@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
@@ -11,7 +12,6 @@ import { CoinSearch } from "@/components/coin-search";
 import { Tick, type Mood } from "@/components/tick";
 import { formatCoin, formatPrice, formatScore, formatUsd, portfolioValue } from "@/lib/format";
 import {
-  DEFAULT_PORTFOLIO,
   DEFAULT_STRATEGY,
   DEFAULT_WATCHLIST,
   isTicker,
@@ -27,11 +27,11 @@ import {
 } from "@/types/database";
 
 
-export function Dashboard() {
+export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
   const [watchlist, setWatchlist] = useState<Asset[]>(DEFAULT_WATCHLIST);
   const [prices, setPrices] = useState<Prices | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
-  const [portfolio, setPortfolio] = useState<Portfolio>(DEFAULT_PORTFOLIO);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [signals, setSignals] = useState<SentimentSignal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategy, setStrategy] = useState<Strategy>(DEFAULT_STRATEGY);
@@ -104,9 +104,11 @@ export function Dashboard() {
   }, [loadPrices]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => void refreshDesk(), 4_000);
+    // With realtime the poll only reconciles missed rows; without it, keep a tight loop.
+    const ms = config?.supabase ? 30_000 : 4_000;
+    const timer = window.setInterval(() => void refreshDesk(), ms);
     return () => window.clearInterval(timer);
-  }, [refreshDesk]);
+  }, [refreshDesk, config?.supabase]);
 
   useEffect(() => {
     let active = true;
@@ -156,7 +158,10 @@ export function Dashboard() {
     try {
       const response = await fetch("/api/grok-scan", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(deskSecret ? { "x-desk-secret": deskSecret } : {}),
+        },
         body: JSON.stringify(strategy),
       });
       const body = (await response.json()) as ScanResponse & { error?: string };
@@ -215,7 +220,10 @@ export function Dashboard() {
     setResetting(true);
     setError(null);
     try {
-      const response = await fetch("/api/portfolio/reset", { method: "POST" });
+      const response = await fetch("/api/portfolio/reset", {
+        method: "POST",
+        headers: deskSecret ? { "x-desk-secret": deskSecret } : undefined,
+      });
       const body = (await response.json()) as { portfolio?: Portfolio; error?: string };
       if (!response.ok || !body.portfolio) {
         setError(body.error ?? "Reset failed");
@@ -233,7 +241,8 @@ export function Dashboard() {
     }
   }
 
-  const total = portfolioValue(portfolio, prices);
+  const total = portfolio ? portfolioValue(portfolio, prices) : null;
+  const pnl = total == null ? null : Math.round((total - 10_000) * 100) / 100;
   const latest = signals[0];
   const mood: Mood = scanning
     ? "scan"
@@ -261,10 +270,10 @@ export function Dashboard() {
     <div className="min-h-full bg-bg text-fg">
       <header className="sticky top-0 z-20 border-b border-line bg-bg/95 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center gap-4 px-4 sm:gap-6 sm:px-6">
-          <div className="flex shrink-0 items-center gap-2.5">
+          <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="TickSense home">
             <Tick mood={mood} size={34} />
             <span className="hidden text-lg font-semibold tracking-tight sm:inline">TickSense</span>
-          </div>
+          </Link>
           <CoinSearch watchlist={watchlist} onAdd={addCoin} onOpen={setSelectedTicker} />
           <div className="ml-auto flex shrink-0 items-center gap-4">
             <span className="hidden text-xs text-muted xl:block" aria-live="polite">
@@ -325,22 +334,32 @@ export function Dashboard() {
             <div className="flex flex-col gap-1">
               <span className="text-xs text-muted">Paper portfolio value</span>
               <span className="text-2xl font-semibold tracking-tight">{total == null ? "—" : formatUsd(total)}</span>
+              {pnl != null ? (
+                <span className={`text-sm font-medium ${pnl >= 0 ? "text-up" : "text-down"}`}>
+                  {pnl >= 0 ? "+" : "−"}
+                  {formatUsd(Math.abs(pnl))} <span className="font-normal text-muted">since the $10,000 start</span>
+                </span>
+              ) : null}
             </div>
-            <dl className="-mx-5 -mb-5 border-t border-line">
-              <Holding label="Cash" value={formatUsd(portfolio.cash_balance)} />
-              {watchlist.map((asset) => {
-                const quantity = portfolio.holdings[asset.symbol] ?? 0;
-                const price = prices?.[asset.symbol];
-                return (
-                  <Holding
-                    key={asset.symbol}
-                    label={asset.symbol}
-                    value={price != null ? formatUsd(quantity * price) : "—"}
-                    detail={`${formatCoin(quantity)} ${asset.symbol}`}
-                  />
-                );
-              })}
-            </dl>
+            {portfolio ? (
+              <dl className="-mx-5 -mb-5 border-t border-line">
+                <Holding label="Cash" value={formatUsd(portfolio.cash_balance)} />
+                {watchlist.map((asset) => {
+                  const quantity = portfolio.holdings[asset.symbol] ?? 0;
+                  const price = prices?.[asset.symbol];
+                  return (
+                    <Holding
+                      key={asset.symbol}
+                      label={asset.symbol}
+                      value={price != null ? formatUsd(quantity * price) : "—"}
+                      detail={`${formatCoin(quantity)} ${asset.symbol}`}
+                    />
+                  );
+                })}
+              </dl>
+            ) : (
+              <p className="text-sm text-muted">Loading the book…</p>
+            )}
           </Panel>
 
           <Panel>
@@ -429,7 +448,9 @@ export function Dashboard() {
         <span>Sentiment: {config?.sentimentMode === "grok" ? "Grok, live" : "sample data (no xAI key)"}</span>
         <span>Book: {config?.dataMode === "supabase" ? "Supabase" : "server memory"}</span>
         <span>Realtime: {config?.supabase ? "on" : "off"}</span>
-        <span className="ml-auto">Paper trading only. Not investment advice.</span>
+        <span className="ml-auto">
+          Paper trading only. Not investment advice. Fills use the latest CoinGecko price; sentiment is a model output.
+        </span>
       </footer>
     </div>
   );
@@ -517,7 +538,8 @@ function summarize(body: ScanResponse): string {
     .map((result) => {
       if (result.error) return `${result.ticker} failed`;
       if (result.trade) return `${result.ticker} ${result.trade.action} filled`;
-      return `${result.ticker} saved, no trade`;
+      const why = result.skippedReason ? ` — ${result.skippedReason}` : "";
+      return `${result.ticker} saved, no trade${why}`;
     })
     .join(" · ");
 }

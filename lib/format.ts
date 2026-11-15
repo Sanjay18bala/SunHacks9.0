@@ -1,4 +1,4 @@
-import type { Portfolio, Prices } from "@/types/database";
+import type { Portfolio, Prices } from "../types/database";
 
 export function formatUsd(value: number): string {
   return new Intl.NumberFormat("en-US", {

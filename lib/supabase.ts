@@ -35,3 +35,9 @@ export function getRealtimeConfig(): { url: string; anonKey: string } | null {
 export function sentimentMode(): "grok" | "sample" {
   return process.env.XAI_API_KEY ? "grok" : "sample";
 }
+
+export function assertDurableBook(): void {
+  if (process.env.VERCEL_ENV === "production" && !getServiceClient()) {
+    throw new Error("Production requires Supabase. Memory mode is local only.");
+  }
+}

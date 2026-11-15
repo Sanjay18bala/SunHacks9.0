@@ -3,7 +3,7 @@ import type { Asset, Prices, Ticker } from "@/types/database";
 export type PricePoint = { time: number; price: number };
 
 const TTL_MS = 15_000;
-const HEADERS = { accept: "application/json", "user-agent": "ticksense/0.1" };
+const HEADERS = { accept: "application/json", "user-agent": "TickSense/0.1" };
 
 // Per-coin cache so adding a coin only fetches that coin, and a rate limit (429) falls back to the last price.
 const priceCache = globalThis as { __coinPrices?: Record<string, { at: number; usd: number }> };

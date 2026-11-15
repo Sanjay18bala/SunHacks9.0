@@ -7,7 +7,7 @@ import {
   type Strategy,
   type Ticker,
   type TradeAction,
-} from "@/types/database";
+} from "../types/database";
 
 export type TradePlan = {
   ticker: Ticker;

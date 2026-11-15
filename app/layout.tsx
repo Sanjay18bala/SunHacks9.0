@@ -15,7 +15,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TickSense",
-  description: "Real-time crypto sentiment signals and a paper trading ledger.",
+  description: "Paper trading for any crypto, driven by Grok sentiment from X and the news.",
+  openGraph: {
+    title: "TickSense",
+    description: "Paper trading for any crypto, driven by Grok sentiment from X and the news.",
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

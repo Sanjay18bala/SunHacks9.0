@@ -66,7 +66,7 @@ export function SentimentChart({
 
   return (
     <Panel>
-      <PanelHead title="Grok sentiment, all coins" meta="click a point to open that coin" />
+      <PanelHead title="Grok sentiment, all coins" meta="click a point, or a coin tab above, to open that coin" />
       {data.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center gap-3">
           <Tick mood="neutral" size={64} />
