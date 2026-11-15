@@ -70,8 +70,8 @@ export function SentimentChart({
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold tracking-wide text-slate-100">Price & sentiment</h2>
-        <p className="text-xs text-slate-400">Press a marker to open that ticker&apos;s charts</p>
+        <h2 className="text-sm font-semibold tracking-wide text-slate-100">Sentiment</h2>
+        <p className="text-xs text-slate-400">Press a marker, or a ticker chip above, to open that ticker&apos;s charts</p>
       </div>
       {data.length === 0 ? (
         <p className="flex h-72 items-center justify-center text-sm text-slate-500">

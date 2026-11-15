@@ -7,7 +7,6 @@ import { SentimentChart } from "@/components/sentiment-chart";
 import { TickerChart } from "@/components/ticker-chart";
 import { formatCoin, formatPrice, formatUsd, portfolioValue } from "@/lib/format";
 import {
-  DEFAULT_PORTFOLIO,
   DEFAULT_STRATEGY,
   holdingsKey,
   type Portfolio,
@@ -25,7 +24,7 @@ const TICKERS: Ticker[] = ["BTC", "ETH", "SOL"];
 export function Dashboard() {
   const [prices, setPrices] = useState<Prices | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
-  const [portfolio, setPortfolio] = useState<Portfolio>(DEFAULT_PORTFOLIO);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [signals, setSignals] = useState<SentimentSignal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [strategy, setStrategy] = useState<Strategy>(DEFAULT_STRATEGY);
@@ -176,7 +175,7 @@ export function Dashboard() {
     }
   }
 
-  const total = portfolioValue(portfolio, prices);
+  const total = portfolio ? portfolioValue(portfolio, prices) : null;
 
   return (
     <div className="min-h-full bg-[#070b14] text-slate-100">
@@ -269,18 +268,22 @@ export function Dashboard() {
 
         <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
           <h2 className="text-sm font-semibold tracking-wide text-slate-100">Portfolio & paper ledger</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Metric label="Cash" value={formatUsd(portfolio.cash_balance)} />
-            {TICKERS.map((ticker) => (
-              <Metric
-                key={ticker}
-                label={`${ticker} holdings`}
-                value={formatCoin(portfolio[holdingsKey(ticker)])}
-                detail={prices ? formatUsd(portfolio[holdingsKey(ticker)] * prices[ticker]) : undefined}
-              />
-            ))}
-            <Metric label="Total value" value={total == null ? "—" : formatUsd(total)} />
-          </div>
+          {portfolio ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <Metric label="Cash" value={formatUsd(portfolio.cash_balance)} />
+              {TICKERS.map((ticker) => (
+                <Metric
+                  key={ticker}
+                  label={`${ticker} holdings`}
+                  value={formatCoin(portfolio[holdingsKey(ticker)])}
+                  detail={prices ? formatUsd(portfolio[holdingsKey(ticker)] * prices[ticker]) : undefined}
+                />
+              ))}
+              <Metric label="Total value" value={total == null ? "—" : formatUsd(total)} />
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">Loading the book…</p>
+          )}
         </section>
 
         {selectedTicker ? (
@@ -293,6 +296,10 @@ export function Dashboard() {
           onSelect={setSelectedTicker}
         />
         <LiveFeeds signals={signals} trades={trades} />
+        <footer className="pb-2 text-center text-xs leading-5 text-slate-500">
+          Paper trading only. Not investment advice. Fills use the latest CoinGecko price, and the sentiment line is a
+          model output.
+        </footer>
       </main>
     </div>
   );
@@ -353,7 +360,8 @@ function summarize(body: ScanResponse): string {
     .map((result) => {
       if (result.error) return `${result.ticker} failed`;
       if (result.trade) return `${result.ticker} ${result.trade.action} filled`;
-      return `${result.ticker} saved, no trade`;
+      const why = result.skippedReason ? ` — ${result.skippedReason}` : "";
+      return `${result.ticker} saved, no trade${why}`;
     })
     .join(" · ");
 }
