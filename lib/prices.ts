@@ -6,9 +6,19 @@ const TTL_MS = 15_000;
 const HEADERS = { accept: "application/json", "user-agent": "TickSense/0.1" };
 
 // Per-coin cache so adding a coin only fetches that coin, and a rate limit (429) falls back to the last price.
-const priceCache = globalThis as { __coinPrices?: Record<string, { at: number; usd: number }> };
+const priceCache = globalThis as {
+  __coinPrices?: Record<string, { at: number; usd: number; change24h: number | null }>;
+};
+
+export type Quote = { usd: number; change24h: number | null };
 
 export async function getPrices(assets: Asset[]): Promise<Prices> {
+  const market = await getMarket(assets);
+  return Object.fromEntries(Object.entries(market).map(([symbol, quote]) => [symbol, quote.usd]));
+}
+
+/** Price plus 24h % change per symbol, from the same per-coin cache. */
+export async function getMarket(assets: Asset[]): Promise<Record<Ticker, Quote>> {
   const cache = (priceCache.__coinPrices ??= {});
   const now = Date.now();
   const stale = assets.filter((asset) => {
@@ -18,30 +28,31 @@ export async function getPrices(assets: Asset[]): Promise<Prices> {
   if (stale.length) {
     try {
       const fresh = await fetchCoinGecko(stale.map((asset) => asset.coingecko_id));
-      for (const [id, usd] of Object.entries(fresh)) cache[id] = { at: now, usd };
+      for (const [id, quote] of Object.entries(fresh)) cache[id] = { at: now, ...quote };
     } catch (error) {
       if (stale.some((asset) => !cache[asset.coingecko_id])) throw error;
     }
   }
-  const prices: Prices = {};
+  const market: Record<Ticker, Quote> = {};
   for (const asset of assets) {
     const hit = cache[asset.coingecko_id];
-    if (hit) prices[asset.symbol] = hit.usd;
+    if (hit) market[asset.symbol] = { usd: hit.usd, change24h: hit.change24h };
   }
-  return prices;
+  return market;
 }
 
-async function fetchCoinGecko(ids: string[]): Promise<Record<string, number>> {
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.map(encodeURIComponent).join(",")}&vs_currencies=usd`;
+async function fetchCoinGecko(ids: string[]): Promise<Record<string, Quote>> {
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.map(encodeURIComponent).join(",")}&vs_currencies=usd&include_24hr_change=true`;
   const response = await fetch(url, { headers: HEADERS, cache: "no-store", signal: AbortSignal.timeout(12_000) });
   if (!response.ok) throw new Error(`CoinGecko returned ${response.status}`);
-  const body = (await response.json()) as Record<string, { usd?: number } | undefined>;
-  const prices: Record<string, number> = {};
+  const body = (await response.json()) as Record<string, { usd?: number; usd_24h_change?: number } | undefined>;
+  const quotes: Record<string, Quote> = {};
   for (const id of ids) {
     const usd = Number(body[id]?.usd);
-    if (Number.isFinite(usd) && usd > 0) prices[id] = usd;
+    const change = Number(body[id]?.usd_24h_change);
+    if (Number.isFinite(usd) && usd > 0) quotes[id] = { usd, change24h: Number.isFinite(change) ? change : null };
   }
-  return prices;
+  return quotes;
 }
 
 export type CoinResult = Asset & { rank: number | null };

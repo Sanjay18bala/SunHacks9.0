@@ -1,7 +1,7 @@
 import type { Asset, SentimentSource, SignalDraft, Ticker } from "@/types/database";
 import { isRecommendedAction } from "@/lib/trading";
 
-const MODEL = "grok-4.1-fast";
+export const MODEL = "grok-4.1-fast";
 
 const SAMPLE_PATTERNS: Array<Pick<SignalDraft, "sentiment_score" | "confidence" | "recommended_action" | "summary_catalyst">> = [
   {
@@ -148,7 +148,7 @@ type JsonRecord = Record<string, unknown> & {
   error?: { message?: string } | string;
 };
 
-async function readJson(response: Response): Promise<JsonRecord> {
+export async function readJson(response: Response): Promise<JsonRecord> {
   const text = await response.text();
   if (!text) return {};
   try {
@@ -158,7 +158,7 @@ async function readJson(response: Response): Promise<JsonRecord> {
   }
 }
 
-function apiError(label: string, status: number, body: JsonRecord): string {
+export function apiError(label: string, status: number, body: JsonRecord): string {
   const nested = body.error;
   const message =
     typeof nested === "string"
@@ -169,7 +169,7 @@ function apiError(label: string, status: number, body: JsonRecord): string {
   return `${label} ${status}: ${message}`;
 }
 
-function textFromResponses(body: JsonRecord): string {
+export function textFromResponses(body: JsonRecord): string {
   if (typeof body.output_text === "string") return body.output_text;
   const chunks: string[] = [];
   for (const item of body.output ?? []) {

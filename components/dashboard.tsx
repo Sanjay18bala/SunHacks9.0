@@ -9,6 +9,7 @@ import { Panel } from "@/components/panel";
 import { SentimentChart } from "@/components/sentiment-chart";
 import { CoinHero } from "@/components/ticker-chart";
 import { CoinSearch } from "@/components/coin-search";
+import { AskTick } from "@/components/ask-tick";
 import { Tick, type Mood } from "@/components/tick";
 import { formatCoin, formatPrice, formatScore, formatUsd, portfolioValue } from "@/lib/format";
 import {
@@ -436,7 +437,7 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
         <div
           key={toast.id}
           role="status"
-          className="tick-pop fixed right-4 bottom-4 z-20 flex items-center gap-3 rounded-xl border border-line bg-bg py-3 pr-5 pl-3 shadow-lg sm:right-6 sm:bottom-6"
+          className="tick-pop fixed bottom-4 left-4 z-20 flex items-center gap-3 rounded-xl border border-line bg-bg py-3 pr-5 pl-3 shadow-lg sm:bottom-6 sm:left-6"
           style={{ marginBottom: "env(safe-area-inset-bottom)" }}
         >
           <Tick mood={toast.action === "BUY" ? "bull" : "bear"} size={48} />
@@ -448,6 +449,8 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
           </div>
         </div>
       ) : null}
+
+      <AskTick deskSecret={deskSecret} coin={coin} />
 
       <footer className="mx-auto flex w-full max-w-[1200px] flex-wrap gap-x-6 gap-y-1 border-t border-line px-4 py-5 text-xs text-muted sm:px-6">
         <span>Sentiment: {config?.sentimentMode === "grok" ? "Grok, live" : "sample data (no xAI key)"}</span>
