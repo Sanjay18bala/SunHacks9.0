@@ -27,7 +27,7 @@ test("brief reports paper pnl and refuses to invent a total without prices", () 
   const priced = buildBrief({
     dataMode: "memory",
     sentimentMode: "sample",
-    portfolio: { ...DEFAULT_PORTFOLIO, cash_balance: 9500, btc_holdings: 5 },
+    portfolio: { ...DEFAULT_PORTFOLIO, cash_balance: 9500, holdings: { BTC: 5 } },
     prices: { BTC: 110, ETH: 1, SOL: 1 },
     signals: [signal],
     trades: [trade],

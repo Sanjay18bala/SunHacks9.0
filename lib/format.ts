@@ -42,10 +42,23 @@ export function formatWhen(iso: string): string {
 
 export function portfolioValue(portfolio: Portfolio, prices: Prices | null): number | null {
   if (!prices) return null;
-  return (
-    portfolio.cash_balance +
-    portfolio.btc_holdings * prices.BTC +
-    portfolio.eth_holdings * prices.ETH +
-    portfolio.sol_holdings * prices.SOL
-  );
+  let total = portfolio.cash_balance;
+  for (const [symbol, quantity] of Object.entries(portfolio.holdings)) {
+    if (!quantity) continue;
+    const price = prices[symbol];
+    if (price == null) return null;
+    total += quantity * price;
+  }
+  return total;
+}
+
+export function formatClock(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Phoenix",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
 }

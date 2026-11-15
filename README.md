@@ -10,7 +10,7 @@ Hackathon prototype. The book is shared until accounts land. Without an xAI key,
 
 **Cursor** is the coding agent for this repo. It writes the desk, keeps fill rules in `lib/trading.ts`, adds tests around those rules, and lands work on `main`. Cursor does not decide that a paper order should print — that decision stays in code the tests cover.
 
-**Grok (in product)** is the sentiment call. `POST /api/grok-scan` sends BTC, ETH, and SOL to the xAI API. Grok returns a score, confidence, catalyst sentence, and BUY / SELL / HOLD. The Responses API path can search the web and X; the chat fallback has no search and must not be labeled as a live reading.
+**Grok (in product)** is the sentiment call. `POST /api/grok-scan` sends every coin on the watchlist (BTC, ETH, and SOL by default; add more from the search bar) to the xAI API. Grok returns a score, confidence, catalyst sentence, and BUY / SELL / HOLD. The Responses API path can search the web and X; the chat fallback has no search and must not be labeled as a live reading.
 
 **Grok Bot** is a teammate in Cursor, separate from the xAI spend. It runs the paper-desk briefing skill in `.cursor/skills/paper-desk-briefing/SKILL.md`: `GET /api/brief`, then posts cash, P&L versus $10,000, latest signals, and latest fills. It never calls scan or reset, and never spends the xAI key.
 
@@ -61,10 +61,10 @@ Copy `.env.example` to `.env.local`.
 | `XAI_API_KEY` | Live Grok scans | `lib/grok.ts` |
 | `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | Stored book | `lib/supabase.ts` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server writes | `lib/supabase.ts` (server only; never `NEXT_PUBLIC_`) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_ANON_KEY` | Browser realtime | `GET /api/config` |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_ANON_KEY` | Browser realtime | `GET /api/config` |
 | `DESK_ADMIN_SECRET` | Protecting scan and reset | `lib/desk-secret.ts` — required when `VERCEL_ENV=production` |
 
-Apply `supabase/schema.sql` in the Supabase SQL editor before the first stored scan. Realtime is enabled for `sentiment_signals` and `trades`.
+Apply `supabase/schema.sql` in the Supabase SQL editor before the first stored scan. A project created before the watchlist existed also needs `supabase/migrations/002_watchlist_holdings.sql` once (additive; it copies existing BTC/ETH/SOL balances into `holdings`). Realtime is enabled for `sentiment_signals` and `trades`.
 
 ## Deploy
 

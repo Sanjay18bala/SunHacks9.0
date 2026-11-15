@@ -2,14 +2,21 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
-import { LiveFeeds } from "@/components/live-feeds";
+import { SignalFeed, TradeLog } from "@/components/live-feeds";
+import { Panel } from "@/components/panel";
 import { SentimentChart } from "@/components/sentiment-chart";
-import { TickerChart } from "@/components/ticker-chart";
-import { formatCoin, formatPrice, formatUsd, portfolioValue } from "@/lib/format";
+import { CoinHero } from "@/components/ticker-chart";
+import { CoinSearch } from "@/components/coin-search";
+import { AskTick } from "@/components/ask-tick";
+import { Tick, type Mood } from "@/components/tick";
+import { formatCoin, formatPrice, formatScore, formatUsd, portfolioValue } from "@/lib/format";
 import {
   DEFAULT_STRATEGY,
-  holdingsKey,
+  DEFAULT_WATCHLIST,
+  isTicker,
+  type Asset,
   type Portfolio,
   type Prices,
   type RealtimeConfig,
@@ -20,9 +27,9 @@ import {
   type Ticker,
 } from "@/types/database";
 
-const TICKERS: Ticker[] = ["BTC", "ETH", "SOL"];
 
 export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
+  const [watchlist, setWatchlist] = useState<Asset[]>(DEFAULT_WATCHLIST);
   const [prices, setPrices] = useState<Prices | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
@@ -36,13 +43,24 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<Ticker | null>(null);
   const generation = useRef(0);
+  const [toast, setToast] = useState<Trade | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+
+  // Tick pops up whenever an order fills, from a scan on this page or over Realtime.
+  const announce = useCallback((trade: Trade | undefined) => {
+    if (!trade) return;
+    setToast((current) => (current?.id === trade.id ? current : trade));
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 5000);
+  }, []);
 
   const refreshDesk = useCallback(async () => {
     const token = ++generation.current;
-    const [portfolioRes, signalRes, tradeRes] = await Promise.all([
+    const [portfolioRes, signalRes, tradeRes, watchRes] = await Promise.all([
       fetch("/api/portfolio", { cache: "no-store" }),
       fetch("/api/signals", { cache: "no-store" }),
       fetch("/api/trades", { cache: "no-store" }),
+      fetch("/api/watchlist", { cache: "no-store" }),
     ]);
     if (token !== generation.current) return;
     if (!portfolioRes.ok) {
@@ -51,38 +69,43 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
       return;
     }
     setPortfolio((await portfolioRes.json()) as Portfolio);
-    setError((current) => (current?.includes("public.portfolio is missing") ? null : current));
+    setError((current) => (current?.includes("a table is missing") ? null : current));
     if (signalRes.ok) setSignals((await signalRes.json()) as SentimentSignal[]);
     if (tradeRes.ok) setTrades((await tradeRes.json()) as Trade[]);
+    if (watchRes.ok) {
+      const body = (await watchRes.json()) as { watchlist?: Asset[] };
+      if (body.watchlist?.length) setWatchlist(body.watchlist);
+    }
+  }, []);
+
+  const loadPrices = useCallback(async () => {
+    try {
+      const response = await fetch("/api/prices", { cache: "no-store" });
+      const body = (await response.json()) as Record<string, unknown>;
+      if (!response.ok) {
+        setPriceError(typeof body.error === "string" ? body.error : "Price request failed");
+        return;
+      }
+      const next: Prices = {};
+      for (const [symbol, value] of Object.entries(body)) if (typeof value === "number") next[symbol] = value;
+      setPrices(next);
+      setPriceError(null);
+    } catch {
+      setPriceError("Price request failed");
+    }
   }, []);
 
   useEffect(() => {
-    let stopped = false;
-    const loadPrices = async () => {
-      try {
-        const response = await fetch("/api/prices", { cache: "no-store" });
-        const body = (await response.json()) as Prices & { error?: string };
-        if (stopped) return;
-        if (!response.ok) {
-          setPriceError(body.error ?? "Price request failed");
-          return;
-        }
-        setPrices({ BTC: body.BTC, ETH: body.ETH, SOL: body.SOL });
-        setPriceError(null);
-      } catch {
-        if (!stopped) setPriceError("Price request failed");
-      }
-    };
-    void loadPrices();
+    const first = window.setTimeout(() => void loadPrices(), 0);
     const timer = window.setInterval(() => void loadPrices(), 20_000);
     return () => {
-      stopped = true;
+      window.clearTimeout(first);
       window.clearInterval(timer);
     };
-  }, []);
+  }, [loadPrices]);
 
   useEffect(() => {
-    // ponytail: with realtime, poll is only a miss-reconcile; without it, keep a tight loop
+    // With realtime the poll only reconciles missed rows; without it, keep a tight loop.
     const ms = config?.supabase ? 30_000 : 4_000;
     const timer = window.setInterval(() => void refreshDesk(), ms);
     return () => window.clearInterval(timer);
@@ -113,6 +136,7 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
           const trade = readTrade(payload.new);
           if (!trade) return;
           setTrades((current) => prepend(current, trade));
+          announce(trade);
           void refreshDesk();
         })
         .subscribe();
@@ -126,7 +150,7 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
       active = false;
       if (client && channel) void client.removeChannel(channel);
     };
-  }, [refreshDesk]);
+  }, [refreshDesk, announce]);
 
   async function scan() {
     setScanning(true);
@@ -146,7 +170,9 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
       if (body.portfolio) setPortfolio(body.portfolio);
       if (body.results) {
         setSignals((current) => mergeFront(current, body.results.flatMap((item) => (item.signal ? [item.signal] : []))));
-        setTrades((current) => mergeFront(current, body.results.flatMap((item) => (item.trade ? [item.trade] : []))));
+        const filled = body.results.flatMap((item) => (item.trade ? [item.trade] : []));
+        setTrades((current) => mergeFront(current, filled));
+        announce(filled[0]);
         setStatus(summarize(body));
       }
       if (!response.ok) setError(body.error ?? "Scan failed");
@@ -156,6 +182,38 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
     } finally {
       setScanning(false);
     }
+  }
+
+  async function addCoin(asset: Asset) {
+    setError(null);
+    const response = await fetch("/api/watchlist", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(asset),
+    });
+    const body = (await response.json()) as { watchlist?: Asset[]; error?: string };
+    if (!response.ok || !body.watchlist) {
+      setError(body.error ?? "Could not add the coin");
+      return;
+    }
+    setWatchlist(body.watchlist);
+    const added = body.watchlist.find((item) => item.coingecko_id === asset.coingecko_id);
+    if (added) setSelectedTicker(added.symbol);
+    setStatus(`Added ${asset.name}. Run a Grok scan to get Tick's read on it.`);
+    void loadPrices();
+  }
+
+  async function removeCoin(symbol: string) {
+    setError(null);
+    const response = await fetch(`/api/watchlist?symbol=${encodeURIComponent(symbol)}`, { method: "DELETE" });
+    const body = (await response.json()) as { watchlist?: Asset[]; error?: string };
+    if (!response.ok || !body.watchlist) {
+      setError(body.error ?? "Could not remove the coin");
+      return;
+    }
+    setWatchlist(body.watchlist);
+    setSelectedTicker(null);
+    setStatus(`Removed ${symbol} from your watchlist.`);
   }
 
   async function reset() {
@@ -186,143 +244,222 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
 
   const total = portfolio ? portfolioValue(portfolio, prices) : null;
   const pnl = total == null ? null : Math.round((total - 10_000) * 100) / 100;
+  const latest = signals[0];
+  const mood: Mood = scanning
+    ? "scan"
+    : !latest
+      ? "neutral"
+      : latest.sentiment_score > 0.15
+        ? "bull"
+        : latest.sentiment_score < -0.15
+          ? "bear"
+          : "neutral";
+  const latestTrade = latest ? trades.find((trade) => trade.trigger_signal_id === latest.id) : undefined;
+  const tickLine = scanning
+    ? "Reading X and the news…"
+    : latest
+      ? `${latest.ticker} ${formatScore(latest.sentiment_score)} · ${
+          latestTrade ? `${latestTrade.action === "BUY" ? "bought" : "sold"} ${formatUsd(latestTrade.amount_usd)}` : "no trade"
+        }`
+      : "Waiting for the first scan";
+  const tickers = watchlist.map((asset) => asset.symbol);
+  const assets = Object.fromEntries(watchlist.map((asset) => [asset.symbol, asset]));
+  const coin = selectedTicker && tickers.includes(selectedTicker) ? selectedTicker : (tickers[0] ?? null);
+  const coinAsset = coin ? assets[coin] : undefined;
 
   return (
-    <div className="min-h-full bg-[#070b14] text-slate-100">
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <Link href="/" className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80 hover:text-cyan-200">
-              TickSense · paper desk
-            </Link>
-            <h1 className="text-2xl font-semibold tracking-tight">Sentiment & paper ledger</h1>
+    <div className="min-h-full bg-bg text-fg">
+      <header className="sticky top-0 z-20 border-b border-line bg-bg/95 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-[1200px] items-center gap-4 px-4 sm:gap-6 sm:px-6">
+          <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="TickSense home">
+            <Tick mood={mood} size={34} />
+            <span className="hidden text-lg font-semibold tracking-tight sm:inline">TickSense</span>
+          </Link>
+          <CoinSearch
+            watchlist={watchlist}
+            canAdd={config?.watchlist !== false}
+            onAdd={addCoin}
+            onOpen={setSelectedTicker}
+          />
+          <div className="ml-auto flex shrink-0 items-center gap-4">
+            <span className="hidden text-xs text-muted xl:block" aria-live="polite">
+              <span className="font-medium text-soft">Tick:</span> {tickLine}
+            </span>
+            <ThemeToggle />
           </div>
-          <p className="max-w-xl text-sm text-slate-400">
-            {config?.sentimentMode === "sample"
-              ? "Sample sentiment is on until an xAI key is set. "
-              : "Grok scans live X and news sentiment. "}
-            {config?.dataMode === "supabase"
-              ? "Signals and trades are stored in Supabase."
-              : "This server keeps the book in memory until Supabase is configured."}
-            {config?.supabase
-              ? " New rows show up immediately over Realtime; the desk reconciles every 30s."
-              : " Signals update when you run a scan. Prices update on their own."}
-          </p>
-        </header>
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            {TICKERS.map((ticker) => (
+        </div>
+        <nav
+          aria-label="Your watchlist"
+          className="mx-auto flex w-full max-w-[1200px] items-stretch gap-1 overflow-x-auto px-4 sm:px-6"
+        >
+          {watchlist.map((asset) => {
+            const on = coin === asset.symbol;
+            const price = prices?.[asset.symbol];
+            return (
               <button
-                key={ticker}
+                key={asset.symbol}
                 type="button"
-                aria-pressed={selectedTicker === ticker}
-                onClick={() => setSelectedTicker((current) => (current === ticker ? null : ticker))}
-                className={`rounded-full border px-3 py-1.5 ${
-                  selectedTicker === ticker ? "border-cyan-300 bg-slate-800" : "border-slate-700 bg-slate-900"
+                aria-pressed={on}
+                onClick={() => setSelectedTicker(asset.symbol)}
+                className={`flex h-11 shrink-0 items-center gap-2 border-b-2 px-3 text-sm transition-colors ${
+                  on ? "border-up font-semibold text-fg" : "border-transparent text-muted hover:text-fg"
                 }`}
               >
-                <span className="mr-2 font-mono text-xs text-slate-400">{ticker}</span>
-                <span className="font-mono text-sm text-slate-50">
-                  {prices ? formatPrice(prices[ticker]) : priceError ? "—" : "…"}
+                {asset.symbol}
+                <span className="font-normal text-muted">{price != null ? formatPrice(price) : priceError ? "—" : ""}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </header>
+
+      <main className="mx-auto grid w-full max-w-[1200px] gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex min-w-0 flex-col gap-8">
+          {coinAsset ? (
+            <CoinHero
+              key={coinAsset.symbol}
+              asset={coinAsset}
+              livePrice={prices?.[coinAsset.symbol]}
+              signals={signals}
+              scanning={scanning}
+              onRemove={config?.watchlist !== false && watchlist.length > 1 ? () => void removeCoin(coinAsset.symbol) : null}
+            />
+          ) : null}
+          <SentimentChart
+            tickers={tickers}
+            signals={signals}
+            buyThreshold={strategy.buyThreshold}
+            sellThreshold={strategy.sellThreshold}
+            onSelect={setSelectedTicker}
+          />
+          <TradeLog trades={trades} assets={assets} />
+        </div>
+
+        <aside className="flex min-w-0 flex-col gap-6">
+          <Panel>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted">Paper portfolio value</span>
+              <span className="text-2xl font-semibold tracking-tight">{total == null ? "—" : formatUsd(total)}</span>
+              {pnl != null ? (
+                <span className={`text-sm font-medium ${pnl >= 0 ? "text-up" : "text-down"}`}>
+                  {pnl >= 0 ? "+" : "−"}
+                  {formatUsd(Math.abs(pnl))} <span className="font-normal text-muted">since the $10,000 start</span>
                 </span>
-              </button>
-            ))}
-            <div className="ml-auto flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void scan()}
-                disabled={scanning || resetting}
-                className="inline-flex h-11 items-center gap-2 rounded-full bg-cyan-300 px-4 text-sm font-semibold text-slate-950 disabled:opacity-60"
-              >
-                {scanning ? <Spinner /> : null}
-                {scanning ? "Scanning" : "Run Grok Scan Now"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void reset()}
-                disabled={scanning || resetting}
-                className="inline-flex h-11 items-center rounded-full border border-slate-600 px-4 text-sm font-semibold text-slate-100 disabled:opacity-60"
-              >
-                {resetting ? "Resetting" : "Reset Demo Portfolio"}
-              </button>
+              ) : null}
             </div>
-          </div>
-          {priceError ? <p className="mt-3 text-sm text-rose-300">{priceError}</p> : null}
+            {portfolio ? (
+              <dl className="-mx-5 -mb-5 border-t border-line">
+                <Holding label="Cash" value={formatUsd(portfolio.cash_balance)} />
+                {watchlist.map((asset) => {
+                  const quantity = portfolio.holdings[asset.symbol] ?? 0;
+                  const price = prices?.[asset.symbol];
+                  return (
+                    <Holding
+                      key={asset.symbol}
+                      label={asset.symbol}
+                      value={price != null ? formatUsd(quantity * price) : "—"}
+                      detail={`${formatCoin(quantity)} ${asset.symbol}`}
+                    />
+                  );
+                })}
+              </dl>
+            ) : (
+              <p className="text-sm text-muted">Loading the book…</p>
+            )}
+          </Panel>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field
-              label="Buy sentiment threshold"
-              value={strategy.buyThreshold}
-              step={0.05}
-              onChange={(buyThreshold) => setStrategy((current) => ({ ...current, buyThreshold }))}
-            />
-            <Field
-              label="Sell sentiment threshold"
-              value={strategy.sellThreshold}
-              step={0.05}
-              onChange={(sellThreshold) => setStrategy((current) => ({ ...current, sellThreshold }))}
-            />
-            <Field
-              label="Min confidence"
-              value={strategy.minConfidence}
-              step={0.05}
-              onChange={(minConfidence) => setStrategy((current) => ({ ...current, minConfidence }))}
-            />
-            <Field
-              label="Trade size ($)"
-              value={strategy.tradeSizeUsd}
-              step={50}
-              onChange={(tradeSizeUsd) => setStrategy((current) => ({ ...current, tradeSizeUsd }))}
-            />
-          </div>
-          {status ? <p className="mt-3 text-sm text-slate-300">{status}</p> : null}
-          {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
-        </section>
-
-        <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
-          <h2 className="text-sm font-semibold tracking-wide text-slate-100">Portfolio & paper ledger</h2>
-          {portfolio ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <Metric label="Cash" value={formatUsd(portfolio.cash_balance)} />
-              {TICKERS.map((ticker) => (
-                <Metric
-                  key={ticker}
-                  label={`${ticker} holdings`}
-                  value={formatCoin(portfolio[holdingsKey(ticker)])}
-                  detail={prices ? formatUsd(portfolio[holdingsKey(ticker)] * prices[ticker]) : undefined}
-                />
-              ))}
-              <Metric
-                label="Total value"
-                value={total == null ? "—" : formatUsd(total)}
-                detail={
-                  pnl == null
-                    ? undefined
-                    : `P&L ${pnl >= 0 ? "+" : ""}${formatUsd(pnl)} vs $10,000 start`
-                }
+          <Panel>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold">Auto-trade</h2>
+              <span className="text-xs text-muted">applies to every scan</span>
+            </div>
+            <div className="-mx-5 flex flex-col border-y border-line">
+              <Field
+                label="Buy when score is above"
+                value={strategy.buyThreshold}
+                step={0.05}
+                onChange={(buyThreshold) => setStrategy((current) => ({ ...current, buyThreshold }))}
+              />
+              <Field
+                label="Sell when score is below"
+                value={strategy.sellThreshold}
+                step={0.05}
+                onChange={(sellThreshold) => setStrategy((current) => ({ ...current, sellThreshold }))}
+              />
+              <Field
+                label="Minimum confidence"
+                value={strategy.minConfidence}
+                step={0.05}
+                onChange={(minConfidence) => setStrategy((current) => ({ ...current, minConfidence }))}
+              />
+              <Field
+                label="Order size ($)"
+                value={strategy.tradeSizeUsd}
+                step={50}
+                onChange={(tradeSizeUsd) => setStrategy((current) => ({ ...current, tradeSizeUsd }))}
               />
             </div>
-          ) : (
-            <p className="mt-3 text-sm text-slate-500">Loading the book…</p>
-          )}
-        </section>
+            {status ? <p className="text-xs leading-5 text-soft">{status}</p> : null}
+            {error ? (
+              <p role="alert" className="text-xs leading-5 text-down">
+                {error}
+              </p>
+            ) : null}
+            {priceError ? (
+              <p role="alert" className="text-xs leading-5 text-down">
+                {priceError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void scan()}
+              disabled={scanning || resetting}
+              className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-up text-[15px] font-semibold text-bg transition-[filter] hover:brightness-95 disabled:opacity-60"
+            >
+              {scanning ? <Spinner /> : null}
+              {scanning ? "Scanning…" : "Run Grok scan"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void reset()}
+              disabled={scanning || resetting}
+              className="-mt-1 text-sm font-medium text-muted hover:text-fg disabled:opacity-50"
+            >
+              {resetting ? "Resetting…" : "Reset demo portfolio"}
+            </button>
+          </Panel>
 
-        {selectedTicker ? (
-          <TickerChart key={selectedTicker} ticker={selectedTicker} signals={signals} onClose={() => setSelectedTicker(null)} />
-        ) : null}
-        <SentimentChart
-          signals={signals}
-          buyThreshold={strategy.buyThreshold}
-          sellThreshold={strategy.sellThreshold}
-          onSelect={setSelectedTicker}
-        />
-        <LiveFeeds signals={signals} trades={trades} />
-        <footer className="pb-2 text-center text-xs leading-5 text-slate-500">
-          Paper trading only. Not investment advice. Fills use the latest CoinGecko price, and the sentiment line is a
-          model output.
-        </footer>
+          <SignalFeed signals={signals} assets={assets} />
+        </aside>
       </main>
+
+      {toast ? (
+        <div
+          key={toast.id}
+          role="status"
+          className="tick-pop fixed bottom-4 left-4 z-20 flex items-center gap-3 rounded-xl border border-line bg-bg py-3 pr-5 pl-3 shadow-lg sm:bottom-6 sm:left-6"
+          style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+        >
+          <Tick mood={toast.action === "BUY" ? "bull" : "bear"} size={48} />
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold">
+              {toast.action === "BUY" ? "Bought" : "Sold"} {formatUsd(toast.amount_usd)} of {toast.ticker}
+            </span>
+            <span className="text-xs text-muted">at {formatPrice(toast.price_at_execution)} · paper trade</span>
+          </div>
+        </div>
+      ) : null}
+
+      <AskTick deskSecret={deskSecret} coin={coin} />
+
+      <footer className="mx-auto flex w-full max-w-[1200px] flex-wrap gap-x-6 gap-y-1 border-t border-line px-4 py-5 text-xs text-muted sm:px-6">
+        <span>Sentiment: {config?.sentimentMode === "grok" ? "Grok, live" : "sample data (no xAI key)"}</span>
+        <span>Book: {config?.dataMode === "supabase" ? "Supabase" : "server memory"}</span>
+        <span>Realtime: {config?.supabase ? "on" : "off"}</span>
+        <span className="ml-auto">
+          Paper trading only. Not investment advice. Fills use the latest CoinGecko price; sentiment is a model output.
+        </span>
+      </footer>
     </div>
   );
 }
@@ -339,31 +476,58 @@ function Field({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-slate-400">
+    <label className="flex items-center justify-between gap-4 border-b border-line px-5 py-3 text-sm text-soft last:border-b-0">
       {label}
       <input
         type="number"
         step={step}
         value={Number.isFinite(value) ? value : 0}
         onChange={(event) => onChange(event.target.value === "" ? 0 : Number(event.target.value))}
-        className="h-10 rounded-lg border border-slate-700 bg-slate-900 px-3 font-mono text-sm text-slate-100 outline-none focus:border-cyan-300"
+        className="h-9 w-24 rounded-md border border-line bg-bg px-2.5 text-right text-sm font-medium text-fg outline-none transition-colors hover:border-dim focus:border-up"
       />
     </label>
   );
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function Holding({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="mt-1 font-mono text-lg text-slate-50">{value}</p>
-      {detail ? <p className="text-xs text-slate-500">{detail}</p> : null}
+    <div className="flex items-baseline justify-between gap-3 border-b border-line px-5 py-3 last:border-b-0">
+      <dt className="text-sm text-soft">{label}</dt>
+      <dd className="flex flex-col items-end">
+        <span className="text-sm font-medium">{value}</span>
+        {detail ? <span className="text-xs text-muted">{detail}</span> : null}
+      </dd>
     </div>
   );
 }
 
+function ThemeToggle() {
+  function toggle() {
+    const root = document.documentElement;
+    const current =
+      root.dataset.theme ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = current === "dark" ? "light" : "dark";
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {}
+  }
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label="Switch between light and dark mode"
+      title="Switch theme"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line text-soft transition-colors hover:text-fg"
+    >
+      <Moon size={16} className="show-in-light" aria-hidden="true" />
+      <Sun size={16} className="show-in-dark" aria-hidden="true" />
+    </button>
+  );
+}
+
 function Spinner() {
-  return <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950 border-t-transparent" />;
+  return <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />;
 }
 
 function prepend<T extends { id: string }>(items: T[], next: T): T[] {
@@ -391,7 +555,7 @@ function summarize(body: ScanResponse): string {
 function readSignal(row: unknown): SentimentSignal | null {
   if (!row || typeof row !== "object") return null;
   const value = row as Partial<SentimentSignal>;
-  if (value.ticker !== "BTC" && value.ticker !== "ETH" && value.ticker !== "SOL") return null;
+  if (!isTicker(value.ticker)) return null;
   if (value.recommended_action !== "BUY" && value.recommended_action !== "SELL" && value.recommended_action !== "HOLD") {
     return null;
   }
@@ -410,7 +574,7 @@ function readSignal(row: unknown): SentimentSignal | null {
 function readTrade(row: unknown): Trade | null {
   if (!row || typeof row !== "object") return null;
   const value = row as Partial<Trade>;
-  if (value.ticker !== "BTC" && value.ticker !== "ETH" && value.ticker !== "SOL") return null;
+  if (!isTicker(value.ticker)) return null;
   if (value.action !== "BUY" && value.action !== "SELL") return null;
   if (!value.id || value.amount_usd == null || value.price_at_execution == null || !value.created_at) return null;
   return {

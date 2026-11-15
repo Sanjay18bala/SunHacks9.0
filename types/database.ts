@@ -1,6 +1,19 @@
-export const TICKERS = ["BTC", "ETH", "SOL"] as const;
+/** Uppercase coin symbol, e.g. "BTC". Any coin on the watchlist. */
+export type Ticker = string;
 
-export type Ticker = (typeof TICKERS)[number];
+/** A coin the desk tracks. coingecko_id drives prices, history and search. */
+export type Asset = {
+  symbol: Ticker;
+  coingecko_id: string;
+  name: string;
+  thumb: string | null;
+};
+
+export const DEFAULT_WATCHLIST: Asset[] = [
+  { symbol: "BTC", coingecko_id: "bitcoin", name: "Bitcoin", thumb: null },
+  { symbol: "ETH", coingecko_id: "ethereum", name: "Ethereum", thumb: null },
+  { symbol: "SOL", coingecko_id: "solana", name: "Solana", thumb: null },
+];
 export type RecommendedAction = "BUY" | "SELL" | "HOLD";
 export type TradeAction = "BUY" | "SELL";
 
@@ -27,9 +40,8 @@ export type Trade = {
 export type Portfolio = {
   id: number;
   cash_balance: number;
-  btc_holdings: number;
-  eth_holdings: number;
-  sol_holdings: number;
+  /** Coin quantity by symbol. Missing means zero. */
+  holdings: Record<Ticker, number>;
 };
 
 export type Prices = Record<Ticker, number>;
@@ -63,14 +75,14 @@ export type RealtimeConfig = {
   dataMode: "supabase" | "memory";
   sentimentMode: SentimentSource;
   supabase: { url: string; anonKey: string } | null;
+  /** False until the watchlist/holdings migration has run on Supabase. */
+  watchlist: boolean;
 };
 
 export const DEFAULT_PORTFOLIO: Portfolio = {
   id: 1,
   cash_balance: 10000,
-  btc_holdings: 0,
-  eth_holdings: 0,
-  sol_holdings: 0,
+  holdings: {},
 };
 
 export const DEFAULT_STRATEGY: Strategy = {
@@ -80,12 +92,6 @@ export const DEFAULT_STRATEGY: Strategy = {
   tradeSizeUsd: 500,
 };
 
-export function holdingsKey(ticker: Ticker): "btc_holdings" | "eth_holdings" | "sol_holdings" {
-  if (ticker === "BTC") return "btc_holdings";
-  if (ticker === "ETH") return "eth_holdings";
-  return "sol_holdings";
-}
-
 export function isTicker(value: unknown): value is Ticker {
-  return value === "BTC" || value === "ETH" || value === "SOL";
+  return typeof value === "string" && /^[A-Z0-9]{1,15}$/.test(value);
 }

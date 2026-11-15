@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TickSense",
-  description: "Paper trading for BTC, ETH, and SOL from Grok sentiment signals.",
+  description: "Paper trading for any crypto, driven by Grok sentiment from X and the news.",
   openGraph: {
     title: "TickSense",
-    description: "Paper trading for BTC, ETH, and SOL from Grok sentiment signals.",
+    description: "Paper trading for any crypto, driven by Grok sentiment from X and the news.",
   },
 };
 
@@ -26,8 +26,16 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

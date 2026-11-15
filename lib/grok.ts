@@ -1,7 +1,7 @@
-import { isTicker, type SentimentSource, type SignalDraft, type Ticker } from "@/types/database";
+import type { Asset, SentimentSource, SignalDraft, Ticker } from "@/types/database";
 import { isRecommendedAction } from "@/lib/trading";
 
-const MODEL = "grok-4.1-fast";
+export const MODEL = "grok-4.1-fast";
 
 const SAMPLE_PATTERNS: Array<Pick<SignalDraft, "sentiment_score" | "confidence" | "recommended_action" | "summary_catalyst">> = [
   {
@@ -50,14 +50,15 @@ const SAMPLE_PATTERNS: Array<Pick<SignalDraft, "sentiment_score" | "confidence" 
 
 const sampleState = globalThis as { __sampleScan?: number };
 
-export async function analyzeTicker(ticker: Ticker): Promise<{ draft: SignalDraft; source: SentimentSource }> {
+export async function analyzeTicker(asset: Asset): Promise<{ draft: SignalDraft; source: SentimentSource }> {
+  const ticker = asset.symbol;
   const apiKey = process.env.XAI_API_KEY;
   if (!apiKey) return { draft: sampleDraft(ticker), source: "sample" };
 
   const prompt = [
-    `Analyze real-time X posts and news sentiment for ${ticker} (${ticker === "BTC" ? "Bitcoin" : ticker === "ETH" ? "Ethereum" : "Solana"}).`,
+    `Analyze real-time X posts and news sentiment for the cryptocurrency ${asset.name} (ticker ${ticker}, CoinGecko id ${asset.coingecko_id}).`,
     "Use current information. Return one JSON object and no other text.",
-    'Shape: {"ticker":"BTC|ETH|SOL","sentiment_score":-1..1,"confidence":0..1,"summary_catalyst":"one or two sentences","recommended_action":"BUY|SELL|HOLD"}.',
+    `Shape: {"ticker":"${ticker}","sentiment_score":-1..1,"confidence":0..1,"summary_catalyst":"one or two sentences","recommended_action":"BUY|SELL|HOLD"}.`,
     "BUY only for a clear bullish catalyst, SELL only for a clear bearish catalyst, otherwise HOLD.",
     `The ticker field must be ${ticker}.`,
   ].join(" ");
@@ -147,7 +148,7 @@ type JsonRecord = Record<string, unknown> & {
   error?: { message?: string } | string;
 };
 
-async function readJson(response: Response): Promise<JsonRecord> {
+export async function readJson(response: Response): Promise<JsonRecord> {
   const text = await response.text();
   if (!text) return {};
   try {
@@ -157,7 +158,7 @@ async function readJson(response: Response): Promise<JsonRecord> {
   }
 }
 
-function apiError(label: string, status: number, body: JsonRecord): string {
+export function apiError(label: string, status: number, body: JsonRecord): string {
   const nested = body.error;
   const message =
     typeof nested === "string"
@@ -168,7 +169,7 @@ function apiError(label: string, status: number, body: JsonRecord): string {
   return `${label} ${status}: ${message}`;
 }
 
-function textFromResponses(body: JsonRecord): string {
+export function textFromResponses(body: JsonRecord): string {
   if (typeof body.output_text === "string") return body.output_text;
   const chunks: string[] = [];
   for (const item of body.output ?? []) {
@@ -202,8 +203,8 @@ export function parseDraft(text: string, ticker: Ticker): SignalDraft {
   }
   const summary = String(parsed.summary_catalyst ?? "").trim();
   if (!summary) throw new Error("Model summary_catalyst was empty");
-  if (parsed.ticker != null && parsed.ticker !== "" && !isTicker(parsed.ticker)) {
-    throw new Error("Model ticker was not BTC, ETH, or SOL");
+  if (parsed.ticker != null && parsed.ticker !== "" && String(parsed.ticker).toUpperCase() !== ticker) {
+    throw new Error(`Model ticker was not ${ticker}`);
   }
   return {
     ticker,
