@@ -7,10 +7,11 @@ export function Landing() {
     <div className="flex min-h-dvh flex-1 flex-col bg-[#05070c] text-slate-100">
       <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-16 px-8 py-16 lg:grid-cols-[minmax(0,1fr)_420px] lg:px-12">
         <section>
-          <p className="text-sm font-medium tracking-[0.16em] text-cyan-400">PAPER DESK</p>
+          <p className="text-sm font-medium tracking-[0.16em] text-cyan-400">PAPER TRADING</p>
           <h1 className="mt-5 max-w-xl text-5xl font-semibold leading-[1.05] tracking-tight text-white sm:text-6xl">
-            Crypto sentiment and paper trading
+            TickSsense
           </h1>
+          <p className="mt-4 text-lg text-slate-300">Crypto sentiment and paper trading</p>
           <p className="mt-6 max-w-xl text-lg text-slate-300">
             Grok reads the mood around Bitcoin, Ethereum, and Solana. The desk only paper-fills an order when your
             thresholds agree. Nothing here is a real trade.

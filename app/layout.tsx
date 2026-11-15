@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Crypto Sentiment Desk",
-  description: "Real-time crypto sentiment signals and a paper trading ledger.",
+  title: "TickSsense",
+  description: "Paper trading for BTC, ETH, and SOL from sentiment signals.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
