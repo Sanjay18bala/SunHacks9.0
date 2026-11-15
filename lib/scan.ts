@@ -6,6 +6,7 @@ import type { ScanResponse, ScanTickerResult, SentimentSource } from "@/types/da
 export async function runScan(input: unknown): Promise<ScanResponse> {
   const tickers = parseTickers(input);
   const strategy = parseStrategy(input);
+  await getPortfolio();
   const results: ScanTickerResult[] = [];
 
   for (const ticker of tickers) {

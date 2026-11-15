@@ -41,8 +41,14 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function assertOk(error: { message: string } | null, action: string) {
-  if (error) throw new Error(`${action}: ${error.message}`);
+function assertOk(error: { message: string; code?: string } | null, action: string) {
+  if (!error) return;
+  if (error.code === "PGRST205" || /schema cache/i.test(error.message)) {
+    throw new Error(
+      "Supabase is connected, but public.portfolio is missing. In the Supabase SQL editor, run supabase/schema.sql from this repo, then scan again.",
+    );
+  }
+  throw new Error(`${action}: ${error.message}`);
 }
 
 function asSignal(row: Record<string, unknown>): SentimentSignal {

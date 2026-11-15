@@ -43,7 +43,13 @@ export function Dashboard() {
       fetch("/api/trades", { cache: "no-store" }),
     ]);
     if (token !== generation.current) return;
-    if (portfolioRes.ok) setPortfolio((await portfolioRes.json()) as Portfolio);
+    if (!portfolioRes.ok) {
+      const body = (await portfolioRes.json()) as { error?: string };
+      setError(body.error ?? "Could not load the portfolio");
+      return;
+    }
+    setPortfolio((await portfolioRes.json()) as Portfolio);
+    setError((current) => (current?.includes("public.portfolio is missing") ? null : current));
     if (signalRes.ok) setSignals((await signalRes.json()) as SentimentSignal[]);
     if (tradeRes.ok) setTrades((await tradeRes.json()) as Trade[]);
   }, []);
