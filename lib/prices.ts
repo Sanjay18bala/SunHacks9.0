@@ -93,28 +93,16 @@ export async function searchCoins(query: string): Promise<CoinResult[]> {
   return results;
 }
 
-export const CHART_RANGES = ["1h", "1d", "1w", "1m", "1y", "max"] as const;
+export const CHART_RANGES = ["1h", "1d"] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 
 export const CHART_RANGE_LABEL: Record<ChartRange, string> = {
   "1h": "1H",
   "1d": "1D",
-  "1w": "1W",
-  "1m": "1M",
-  "1y": "1Y",
-  max: "MAX",
 };
 
 const HOUR_MS = 60 * 60 * 1000;
-// 1H is sliced from the 1-day series, so it does not spend an extra CoinGecko call.
-const RANGE_QUERY: Record<ChartRange, { days: string; ttl: number }> = {
-  "1h": { days: "1", ttl: 60_000 },
-  "1d": { days: "1", ttl: 60_000 },
-  "1w": { days: "7", ttl: 5 * 60_000 },
-  "1m": { days: "30", ttl: 15 * 60_000 },
-  "1y": { days: "365", ttl: 60 * 60_000 },
-  max: { days: "max", ttl: 6 * 60 * 60_000 },
-};
+const HISTORY_TTL_MS = 60_000;
 
 const historyCache = globalThis as {
   __priceHistory?: Record<string, { at: number; points: PricePoint[] }>;
@@ -125,35 +113,29 @@ export function isChartRange(value: string): value is ChartRange {
 }
 
 export async function getPriceHistory(asset: Asset, range: ChartRange = "1d"): Promise<PricePoint[]> {
-  const query = RANGE_QUERY[range];
-  const series = await loadSeries(asset, query.days, query.ttl);
+  // 1H is the last hour of the same one-day series, so both buttons share one CoinGecko call.
+  const series = await loadSeries(asset, HISTORY_TTL_MS);
   const points = selectChartPoints(series, range);
   if (points.length === 0) throw new Error(`CoinGecko returned no ${asset.symbol} price history`);
   return points;
 }
 
-async function loadSeries(asset: Asset, days: string, ttl: number): Promise<PricePoint[]> {
-  const key = `${asset.coingecko_id}:${days}`;
+async function loadSeries(asset: Asset, ttl: number): Promise<PricePoint[]> {
+  const key = `${asset.coingecko_id}:1`;
   const now = Date.now();
   const cached = historyCache.__priceHistory?.[key];
   if (cached && now - cached.at < ttl) return cached.points;
 
   try {
     const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(asset.coingecko_id)}/market_chart?vs_currency=usd&days=${days}`,
+      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(asset.coingecko_id)}/market_chart?vs_currency=usd&days=1`,
       {
         headers: HEADERS,
         cache: "no-store",
         signal: AbortSignal.timeout(12_000),
       },
     );
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      if (response.status === 401 && /past 365 days|allowed time range/i.test(detail)) {
-        throw new Error("The free price feed only goes back one year.");
-      }
-      throw new Error(`CoinGecko history returned ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`CoinGecko history returned ${response.status}`);
     const body = (await response.json()) as { prices?: unknown };
     const points = parseHistory(body.prices);
     if (points.length === 0) throw new Error(`CoinGecko returned no ${asset.symbol} price history`);

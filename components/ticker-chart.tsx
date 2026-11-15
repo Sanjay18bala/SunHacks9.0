@@ -12,10 +12,6 @@ import type { Asset, SentimentSignal, Ticker } from "@/types/database";
 const RANGE_TITLE: Record<ChartRange, string> = {
   "1h": "Last hour",
   "1d": "Last 24 hours",
-  "1w": "Last 7 days",
-  "1m": "Last 30 days",
-  "1y": "Last year",
-  max: "All history",
 };
 
 export function CoinHero({
@@ -138,9 +134,7 @@ export function CoinHero({
             <p className="max-w-xs text-sm text-muted">
               {error.includes("429")
                 ? "The free price feed is busy. Tick will retry in a minute."
-                : error.includes("only goes back")
-                  ? "The free price feed only goes back one year."
-                  : `Couldn't load the price chart. ${error}`}
+                : `Couldn't load the price chart. ${error}`}
             </p>
           </div>
         ) : !shown ? (
