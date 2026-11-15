@@ -157,7 +157,7 @@ export function AskTick({ deskSecret, coin }: { deskSecret: string; coin: string
         }}
         className="border-t border-line p-3"
       >
-        <div className="flex items-end gap-2 rounded-lg border border-line bg-bg px-3 py-2 focus-within:border-fg">
+        <div className="flex items-end gap-2 rounded-lg border border-line bg-bg px-3 py-2">
           <label htmlFor="ask-tick-input" className="sr-only">
             Ask Tick a question
           </label>
