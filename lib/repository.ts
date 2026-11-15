@@ -1,5 +1,5 @@
 import { getPrices } from "@/lib/prices";
-import { getServiceClient } from "@/lib/supabase";
+import { assertDurableBook, getServiceClient } from "@/lib/supabase";
 import { decideTrade, planTrade } from "@/lib/trading";
 import {
   DEFAULT_PORTFOLIO,
@@ -128,6 +128,7 @@ async function insertDefaultPortfolio(client: NonNullable<ReturnType<typeof getS
 }
 
 export async function resetDemo(): Promise<Portfolio> {
+  assertDurableBook();
   return enqueue(async () => {
     const client = getServiceClient();
     if (!client) {

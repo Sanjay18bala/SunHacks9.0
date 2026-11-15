@@ -68,6 +68,7 @@ Copy `.env.example` to `.env.local`.
 | `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_URL` | A stored book | `lib/supabase.ts` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server writes | `lib/supabase.ts`. Server only. Bypasses row level security. Never prefix it with `NEXT_PUBLIC_`. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY` | Browser realtime | Returned by `GET /api/config`. Public by design. It must not be able to insert, update, or delete. |
+| `DESK_ADMIN_SECRET` | Protecting scan and reset | `lib/desk-secret.ts`. Required when `VERCEL_ENV` is `production`. |
 
 Apply `supabase/schema.sql` in the Supabase SQL editor before the first stored scan. If the project already ran an older copy of that file, apply the `supabase/migrate-*.sql` files that match it. Realtime is enabled for `sentiment_signals` and `trades`.
 
@@ -80,24 +81,25 @@ Production target is Vercel, with Supabase attached.
 1. Create a Supabase project and run `supabase/schema.sql`. Confirm `public.portfolio` has one row, id 1, cash 10000.
 2. Import this GitHub repo in Vercel. Framework preset Next.js. Production branch `main`.
 3. Set every variable from `.env.example` on Production and Preview. Preview shares the demo book during the hackathon.
-4. Open the `*.vercel.app` URL, run one scan, and refresh. The row should still be there.
-5. Put that URL in this README and in the GitHub homepage field.
-6. Add a custom domain in Vercel after the `*.vercel.app` URL already works, then replace the link here. DNS does not block the demo.
+4. Deploy only after `DESK_ADMIN_SECRET` is set. Scan and reset return 401 without it.
+5. Open the `*.vercel.app` URL, run one scan, and refresh. The row should still be there.
+6. Put that URL in this README and in the GitHub homepage field.
+7. Add a custom domain in Vercel after the `*.vercel.app` URL already works, then replace the link here. DNS does not block the demo.
 
-Do not put `XAI_API_KEY` on a public URL until scan and reset require a server-side secret. That lock is a separate change. Memory mode on a serverless host splits into one book per instance, so production needs Supabase.
+`VERCEL_ENV=production` refuses a scan when Supabase is missing, so a production instance cannot keep a private memory book. The desk secret is passed into the page so the buttons work. Anyone who can load the page can read it out of the payload. It stops a bare POST. It is not an account system.
 
 ## Limits
 
 - One shared book until per-user accounts ship. Reset clears trades, restores $10,000, and leaves signals in place.
 - Sample rows and live rows look the same after a refresh, because the signal row does not store which path produced it yet.
 - Cash columns are floating point. A fill is two writes. A crash between them can move cash without a trade row.
-- Scan and reset are open POSTs until the desk secret lands. Do not deploy the xAI key before that.
+- Scan and reset require `DESK_ADMIN_SECRET` in production. A request without that header gets 401 and does not call Grok.
 - Times on the chart use America/Phoenix.
 - CoinGecko's public API throttles. The server caches quotes for 15 seconds and history for 60 seconds.
 
 ## Scripts
 
 - `npm run dev` starts the app.
-- `npm test` runs the trading and briefing tests.
+- `npm test` runs the trading, briefing, and desk-lock tests.
 - `npm run lint` runs ESLint.
 - `npm run build` produces the production build.

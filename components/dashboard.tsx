@@ -21,7 +21,7 @@ import {
 
 const TICKERS: Ticker[] = ["BTC", "ETH", "SOL"];
 
-export function Dashboard() {
+export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
   const [prices, setPrices] = useState<Prices | null>(null);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
@@ -132,7 +132,10 @@ export function Dashboard() {
     try {
       const response = await fetch("/api/grok-scan", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(deskSecret ? { "x-desk-secret": deskSecret } : {}),
+        },
         body: JSON.stringify(strategy),
       });
       const body = (await response.json()) as ScanResponse & { error?: string };
@@ -157,7 +160,10 @@ export function Dashboard() {
     setResetting(true);
     setError(null);
     try {
-      const response = await fetch("/api/portfolio/reset", { method: "POST" });
+      const response = await fetch("/api/portfolio/reset", {
+        method: "POST",
+        headers: deskSecret ? { "x-desk-secret": deskSecret } : undefined,
+      });
       const body = (await response.json()) as { portfolio?: Portfolio; error?: string };
       if (!response.ok || !body.portfolio) {
         setError(body.error ?? "Reset failed");
