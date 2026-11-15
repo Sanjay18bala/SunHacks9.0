@@ -1,7 +1,7 @@
 import type { Asset, SentimentSource, SignalDraft, Ticker } from "@/types/database";
 import { isRecommendedAction } from "@/lib/trading";
 
-export const MODEL = "grok-4.1-fast";
+export const MODEL = "grok-4.3";
 
 const SAMPLE_PATTERNS: Array<Pick<SignalDraft, "sentiment_score" | "confidence" | "recommended_action" | "summary_catalyst">> = [
   {
