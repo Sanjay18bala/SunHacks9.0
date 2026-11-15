@@ -93,37 +93,92 @@ export async function searchCoins(query: string): Promise<CoinResult[]> {
   return results;
 }
 
-const HISTORY_TTL_MS = 60_000;
-const historyCache = globalThis as {
-  __priceHistory?: Record<Ticker, { at: number; points: PricePoint[] }>;
+export const CHART_RANGES = ["1h", "1d", "1w", "1m", "1y", "max"] as const;
+export type ChartRange = (typeof CHART_RANGES)[number];
+
+export const CHART_RANGE_LABEL: Record<ChartRange, string> = {
+  "1h": "1H",
+  "1d": "1D",
+  "1w": "1W",
+  "1m": "1M",
+  "1y": "1Y",
+  max: "MAX",
 };
 
-export async function getPriceHistory(asset: Asset): Promise<PricePoint[]> {
-  const ticker = asset.symbol;
+const HOUR_MS = 60 * 60 * 1000;
+// 1H is sliced from the 1-day series, so it does not spend an extra CoinGecko call.
+const RANGE_QUERY: Record<ChartRange, { days: string; ttl: number }> = {
+  "1h": { days: "1", ttl: 60_000 },
+  "1d": { days: "1", ttl: 60_000 },
+  "1w": { days: "7", ttl: 5 * 60_000 },
+  "1m": { days: "30", ttl: 15 * 60_000 },
+  "1y": { days: "365", ttl: 60 * 60_000 },
+  max: { days: "max", ttl: 6 * 60 * 60_000 },
+};
+
+const historyCache = globalThis as {
+  __priceHistory?: Record<string, { at: number; points: PricePoint[] }>;
+};
+
+export function isChartRange(value: string): value is ChartRange {
+  return (CHART_RANGES as readonly string[]).includes(value);
+}
+
+export async function getPriceHistory(asset: Asset, range: ChartRange = "1d"): Promise<PricePoint[]> {
+  const query = RANGE_QUERY[range];
+  const series = await loadSeries(asset, query.days, query.ttl);
+  const points = selectChartPoints(series, range);
+  if (points.length === 0) throw new Error(`CoinGecko returned no ${asset.symbol} price history`);
+  return points;
+}
+
+async function loadSeries(asset: Asset, days: string, ttl: number): Promise<PricePoint[]> {
+  const key = `${asset.coingecko_id}:${days}`;
   const now = Date.now();
-  const cached = historyCache.__priceHistory?.[ticker];
-  if (cached && now - cached.at < HISTORY_TTL_MS) return cached.points;
+  const cached = historyCache.__priceHistory?.[key];
+  if (cached && now - cached.at < ttl) return cached.points;
 
   try {
     const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(asset.coingecko_id)}/market_chart?vs_currency=usd&days=1`,
+      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(asset.coingecko_id)}/market_chart?vs_currency=usd&days=${days}`,
       {
         headers: HEADERS,
         cache: "no-store",
         signal: AbortSignal.timeout(12_000),
       },
     );
-    if (!response.ok) throw new Error(`CoinGecko history returned ${response.status}`);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      if (response.status === 401 && /past 365 days|allowed time range/i.test(detail)) {
+        throw new Error("The free price feed only goes back one year.");
+      }
+      throw new Error(`CoinGecko history returned ${response.status}`);
+    }
     const body = (await response.json()) as { prices?: unknown };
-    const points = thin(parseHistory(body.prices), 180);
-    if (points.length === 0) throw new Error(`CoinGecko returned no ${ticker} price history`);
-    historyCache.__priceHistory = { ...historyCache.__priceHistory, [ticker]: { at: now, points } };
+    const points = parseHistory(body.prices);
+    if (points.length === 0) throw new Error(`CoinGecko returned no ${asset.symbol} price history`);
+    historyCache.__priceHistory = { ...historyCache.__priceHistory, [key]: { at: now, points } };
     return points;
   } catch (error) {
     // Rate limits (429) are common on CoinGecko's free tier; a slightly stale chart beats an empty one.
     if (cached) return cached.points;
     throw error;
   }
+}
+
+/** Keep the points that belong in the selected window, then cap the series for the chart. */
+export function selectChartPoints(points: PricePoint[], range: ChartRange): PricePoint[] {
+  const ordered = [...points].sort((a, b) => a.time - b.time);
+  const windowed = range === "1h" ? lastHour(ordered) : ordered;
+  return thin(windowed, 400);
+}
+
+function lastHour(points: PricePoint[]): PricePoint[] {
+  if (points.length === 0) return points;
+  const end = points[points.length - 1].time;
+  const sliced = points.filter((point) => point.time >= end - HOUR_MS);
+  if (sliced.length >= 2) return sliced;
+  return points.slice(-2);
 }
 
 function parseHistory(value: unknown): PricePoint[] {

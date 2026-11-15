@@ -5,9 +5,18 @@ import { Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tool
 import { CoinAvatar } from "@/components/panel";
 import { Tick, moodFromScore } from "@/components/tick";
 import { DOWN, TOOLTIP_STYLE, UP } from "@/components/chart-style";
-import { formatClock, formatPrice, formatScore, formatUsd, formatWhen } from "@/lib/format";
-import type { PricePoint } from "@/lib/prices";
+import { formatChartTime, formatClock, formatPrice, formatScore, formatUsd } from "@/lib/format";
+import { CHART_RANGE_LABEL, CHART_RANGES, type ChartRange, type PricePoint } from "@/lib/prices";
 import type { Asset, SentimentSignal, Ticker } from "@/types/database";
+
+const RANGE_TITLE: Record<ChartRange, string> = {
+  "1h": "Last hour",
+  "1d": "Last 24 hours",
+  "1w": "Last 7 days",
+  "1m": "Last 30 days",
+  "1y": "Last year",
+  max: "All history",
+};
 
 export function CoinHero({
   asset,
@@ -26,13 +35,14 @@ export function CoinHero({
   const latest = signals.find((signal) => signal.ticker === ticker);
   const mood = scanning ? "scan" : moodFromScore(latest?.sentiment_score);
   const feeling = { bull: "Feeling bullish", bear: "Feeling worried", neutral: "Feeling calm", scan: "Reading the room…" }[mood];
-  const [history, setHistory] = useState<{ ticker: Ticker; points: PricePoint[] } | null>(null);
+  const [range, setRange] = useState<ChartRange>("1d");
+  const [history, setHistory] = useState<{ ticker: Ticker; range: ChartRange; points: PricePoint[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const load = () =>
-      fetch(`/api/prices/history?ticker=${ticker}`, { cache: "no-store" })
+      fetch(`/api/prices/history?ticker=${ticker}&range=${range}`, { cache: "no-store" })
       .then(async (response) => {
         const body = (await response.json()) as { points?: PricePoint[]; error?: string };
         if (!response.ok) throw new Error(body.error ?? "Price history failed");
@@ -40,7 +50,7 @@ export function CoinHero({
       })
       .then((points) => {
         if (!cancelled) {
-          setHistory({ ticker, points });
+          setHistory({ ticker, range, points });
           setError(null);
         }
       })
@@ -53,24 +63,26 @@ export function CoinHero({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [ticker]);
+  }, [ticker, range]);
 
-  const points = history?.ticker === ticker ? history.points : null;
-  const open = points?.[0]?.price;
-  const price = livePrice ?? points?.at(-1)?.price;
-  const change = price != null && open != null ? price - open : null;
+  const selected = history?.ticker === ticker && history.range === range ? history.points : null;
+  const shown = selected ?? (history?.ticker === ticker ? history.points : null);
+  const open = selected?.[0]?.price;
+  const price = livePrice ?? selected?.at(-1)?.price ?? shown?.at(-1)?.price;
+  const change = selected && price != null && open != null ? price - open : null;
   const pct = change != null && open ? (change / open) * 100 : null;
-  const up = (change ?? 0) >= 0;
+  const up = change != null ? change >= 0 : shown != null && shown.length > 0 ? shown[shown.length - 1].price >= shown[0].price : true;
+  const rangeLabel = CHART_RANGE_LABEL[range];
 
   // Pin each of this coin's Grok signals onto the nearest price point in the window.
   const markers =
-    points && points.length
+    shown && shown.length
       ? signals
           .filter((signal) => signal.ticker === ticker)
           .flatMap((signal) => {
             const t = new Date(signal.created_at).getTime();
-            if (t < points[0].time || t > points[points.length - 1].time) return [];
-            const nearest = points.reduce((best, point) => (Math.abs(point.time - t) < Math.abs(best.time - t) ? point : best));
+            if (t < shown[0].time || t > shown[shown.length - 1].time) return [];
+            const nearest = shown.reduce((best, point) => (Math.abs(point.time - t) < Math.abs(best.time - t) ? point : best));
             return [{ id: signal.id, time: nearest.time, price: nearest.price, score: signal.sentiment_score }];
           })
           .slice(0, 40)
@@ -99,9 +111,9 @@ export function CoinHero({
         <span className="text-[34px] font-semibold leading-none tracking-tight">{price != null ? formatPrice(price) : "—"}</span>
         <span className={`text-sm font-medium ${change == null ? "text-muted" : up ? "text-up" : "text-down"}`}>
           {change == null
-            ? "Loading 24h change…"
+            ? `Loading ${rangeLabel} change…`
             : `${up ? "+" : "−"}${formatUsd(Math.abs(change))} (${Math.abs(pct ?? 0).toFixed(2)}%)`}
-          <span className="ml-1.5 font-normal text-muted">24H</span>
+          <span className="ml-1.5 font-normal text-muted">{rangeLabel}</span>
         </span>
       </div>
       <div className="flex items-center gap-3" aria-live="polite">
@@ -120,27 +132,29 @@ export function CoinHero({
       </div>
 
       <div className="h-72 w-full">
-        {error && !points ? (
+        {error && !selected ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg bg-panel text-center">
             <Tick mood="neutral" size={48} />
             <p className="max-w-xs text-sm text-muted">
               {error.includes("429")
                 ? "The free price feed is busy. Tick will retry in a minute."
-                : `Couldn't load the price chart. ${error}`}
+                : error.includes("only goes back")
+                  ? "The free price feed only goes back one year."
+                  : `Couldn't load the price chart. ${error}`}
             </p>
           </div>
-        ) : !points ? (
+        ) : !shown ? (
           <div className="h-full animate-pulse rounded-lg bg-panel" />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 8, right: 4, left: 4, bottom: 8 }}>
+            <LineChart data={shown} margin={{ top: 8, right: 4, left: 4, bottom: 8 }}>
               <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} hide />
               <YAxis domain={["auto", "auto"]} hide />
               {open != null ? <ReferenceLine y={open} stroke="var(--dim)" strokeDasharray="3 4" /> : null}
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 cursor={{ stroke: "var(--dim)" }}
-                labelFormatter={(value) => formatWhen(new Date(Number(value)).toISOString())}
+                labelFormatter={(value) => formatChartTime(new Date(Number(value)).toISOString(), range)}
                 formatter={(value) => [typeof value === "number" ? formatPrice(value) : "—", "Price"]}
               />
               <Line
@@ -170,7 +184,26 @@ export function CoinHero({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4 text-xs text-muted">
-        <span className="rounded-full border border-fg px-3 py-1 font-medium text-fg">24H</span>
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Chart range">
+          {CHART_RANGES.map((option) => (
+            <button
+              key={option}
+              type="button"
+              title={RANGE_TITLE[option]}
+              aria-pressed={option === range}
+              onClick={() => {
+                if (option === range) return;
+                setError(null);
+                setRange(option);
+              }}
+              className={`rounded-full border px-3 py-1 font-medium transition-colors ${
+                option === range ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg"
+              }`}
+            >
+              {CHART_RANGE_LABEL[option]}
+            </button>
+          ))}
+        </div>
         <span className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full border-2 border-up bg-bg" /> bullish signal

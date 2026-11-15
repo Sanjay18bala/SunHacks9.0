@@ -52,6 +52,20 @@ export function portfolioValue(portfolio: Portfolio, prices: Prices | null): num
   return total;
 }
 
+export function formatChartTime(iso: string, range: "1h" | "1d" | "1w" | "1m" | "1y" | "max"): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const withTime = range === "1h" || range === "1d" || range === "1w" || range === "1m";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Phoenix",
+    month: "short",
+    day: "numeric",
+    year: withTime ? undefined : "numeric",
+    hour: withTime ? "numeric" : undefined,
+    minute: withTime ? "2-digit" : undefined,
+  }).format(date);
+}
+
 export function formatClock(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
