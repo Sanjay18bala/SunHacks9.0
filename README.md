@@ -1,4 +1,4 @@
-# Crypto Sentiment Desk
+# TickSense
 
 Paper-trading dashboard for BTC, ETH, and SOL. Grok scans live sentiment, the server compares each signal with your thresholds, and qualifying orders update a single demo portfolio.
 

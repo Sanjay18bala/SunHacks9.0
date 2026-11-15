@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Crypto Sentiment Desk",
+  title: "TickSense",
   description: "Real-time crypto sentiment signals and a paper trading ledger.",
 };
 
