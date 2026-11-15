@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import { LiveFeeds } from "@/components/live-feeds";
 import { SentimentChart } from "@/components/sentiment-chart";
+import { TickerChart } from "@/components/ticker-chart";
 import { formatCoin, formatPrice, formatUsd, portfolioValue } from "@/lib/format";
 import {
   DEFAULT_PORTFOLIO,
@@ -33,6 +34,7 @@ export function Dashboard() {
   const [resetting, setResetting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTicker, setSelectedTicker] = useState<Ticker | null>(null);
   const generation = useRef(0);
 
   const refreshDesk = useCallback(async () => {
@@ -198,12 +200,20 @@ export function Dashboard() {
         <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
           <div className="flex flex-wrap items-center gap-3">
             {TICKERS.map((ticker) => (
-              <div key={ticker} className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5">
+              <button
+                key={ticker}
+                type="button"
+                aria-pressed={selectedTicker === ticker}
+                onClick={() => setSelectedTicker((current) => (current === ticker ? null : ticker))}
+                className={`rounded-full border px-3 py-1.5 ${
+                  selectedTicker === ticker ? "border-cyan-300 bg-slate-800" : "border-slate-700 bg-slate-900"
+                }`}
+              >
                 <span className="mr-2 font-mono text-xs text-slate-400">{ticker}</span>
                 <span className="font-mono text-sm text-slate-50">
                   {prices ? formatPrice(prices[ticker]) : priceError ? "—" : "…"}
                 </span>
-              </div>
+              </button>
             ))}
             <div className="ml-auto flex flex-wrap gap-2">
               <button
@@ -273,7 +283,15 @@ export function Dashboard() {
           </div>
         </section>
 
-        <SentimentChart signals={signals} buyThreshold={strategy.buyThreshold} sellThreshold={strategy.sellThreshold} />
+        {selectedTicker ? (
+          <TickerChart key={selectedTicker} ticker={selectedTicker} signals={signals} onClose={() => setSelectedTicker(null)} />
+        ) : null}
+        <SentimentChart
+          signals={signals}
+          buyThreshold={strategy.buyThreshold}
+          sellThreshold={strategy.sellThreshold}
+          onSelect={setSelectedTicker}
+        />
         <LiveFeeds signals={signals} trades={trades} />
       </main>
     </div>
