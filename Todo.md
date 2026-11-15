@@ -1,4 +1,4 @@
-# Crypto Sentiment Desk — build plan
+# TickSsense — build plan
 
 Repo: [Sanjay18bala/SunHacks9.0](https://github.com/Sanjay18bala/SunHacks9.0)
 Reviewed against `main` at `a810ae9` (2026-11-14) and open [PR #3](https://github.com/Sanjay18bala/SunHacks9.0/pull/3) (`dev` @ `509bd7b`).
@@ -93,7 +93,7 @@ Do these before new features. They are the difference between a demo and a folde
 
 **Change the README to these sections, in this order.** Write it in plain sentences. No badge row.
 
-1. **Crypto Sentiment Desk.** One paragraph. Paper trading for BTC, ETH, and SOL. Grok returns a score, a confidence, a catalyst sentence, and BUY / SELL / HOLD. The server, not the model, decides whether an order prints. Fills hit one shared demo portfolio. No broker, no real orders, no custody.
+1. **TickSsense.** One paragraph. Paper trading for BTC, ETH, and SOL. Grok returns a score, a confidence, a catalyst sentence, and BUY / SELL / HOLD. The server, not the model, decides whether an order prints. Fills hit one shared demo portfolio. No broker, no real orders, no custody.
 2. **How a fill happens.** The four gates, matching `lib/trading.ts`:
    - confidence ≥ min confidence (default 0.75)
    - BUY only if the model said BUY and score ≥ buy threshold (default 0.70)
@@ -118,7 +118,7 @@ Do these before new features. They are the difference between a demo and a folde
 8. **Deploy.** Pointer to the live URL once P0.5 exists, plus "see Deploy below" with the Vercel steps from P0.5. Until the URL exists, this section says the production target and that memory mode must not be used there.
 9. **Limits, written down.** One shared book. Reset clears trades and restores $10,000, and leaves signals in place. Sample rows are not tagged in the database (fixed in P1.3). Cash is a float today (fixed in P2.2). Scans are unauthenticated today (fixed in P0.4).
 
-Also set `"name": "crypto-sentiment-desk"` in `package.json`.
+Also set `"name": "tickssense"` in `package.json`. The product name on the page and in the README is TickSsense.
 
 On GitHub, set the repo description to the first sentence of the README, and set the homepage to the deployed URL when it exists. Topics: `nextjs`, `supabase`, `paper-trading`.
 

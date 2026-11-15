@@ -1,6 +1,6 @@
-# Crypto Sentiment Desk
+# TickSsense
 
-A paper-trading desk for Bitcoin, Ethereum, and Solana. You set four gates. A scan asks Grok for the mood around each coin. The server, not the model, decides whether that mood becomes a paper order. Fills update one shared demo portfolio that starts at $10,000. There is no broker, no custody, and no real order.
+A paper-trading desk called TickSsense, for Bitcoin, Ethereum, and Solana. You set four gates. A scan asks Grok for the mood around each coin. The server, not the model, decides whether that mood becomes a paper order. Fills update one shared demo portfolio that starts at $10,000. There is no broker, no custody, and no real order.
 
 This is a hackathon prototype. The book is shared until accounts land. Sample mode is a scripted sequence, not a live reading.
 
@@ -22,7 +22,7 @@ Grok Bot is a teammate in Cursor, separate from the xAI call. Its job in our wor
 
 To turn that into a Grok Bot routine, open a Bot and send:
 
-> Your job is the paper-desk briefing. Read the skill "Paper desk briefing" in this repo and remember it. Every hour, GET {DEPLOY_URL}/api/brief and post a plain-language note in this chat: cash, profit or loss versus $10,000, whether sentiment is sample or live, what just filled, and what was skipped if the brief says so. If the URL fails, report the failure. Do not place trades, do not reset the portfolio, do not call POST /api/grok-scan, and do not spend the xAI key.
+> Your job is the TickSsense briefing. Read the skill "Paper desk briefing" in this repo and remember it. Every hour, GET {DEPLOY_URL}/api/brief and post a plain-language note in this chat: cash, profit or loss versus $10,000, whether sentiment is sample or live, what just filled, and what was skipped if the brief says so. If the URL fails, report the failure. Do not place trades, do not reset the portfolio, do not call POST /api/grok-scan, and do not spend the xAI key.
 
 Replace `{DEPLOY_URL}` with the deployed origin. Save that process as a skill named "Paper desk briefing", then make it a routine on the hour. The routine runs in Grok Bot. The desk only supplies the brief.
 
