@@ -188,8 +188,8 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80">Paper desk</p>
-            <h1 className="text-2xl font-semibold tracking-tight">Crypto sentiment & paper trading</h1>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80">Paper trading</p>
+            <h1 className="text-2xl font-semibold tracking-tight">TickSsense</h1>
           </div>
           <p className="max-w-xl text-sm text-slate-400">
             {config?.sentimentMode === "sample"
