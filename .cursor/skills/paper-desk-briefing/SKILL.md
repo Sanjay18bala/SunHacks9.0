@@ -1,7 +1,7 @@
 ---
 name: paper-desk-briefing
 description: >-
-  Summarize TickSsense from GET /api/brief: cash, profit or loss,
+  Summarize TickSense from GET /api/brief: cash, profit or loss,
   latest signals, and latest fills. Use when a Grok Bot routine or a teammate
   asks for the paper-desk briefing. Never scan, reset, or spend the xAI key.
 ---

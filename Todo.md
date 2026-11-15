@@ -1,9 +1,27 @@
-# TickSsense — build plan
+# TickSense — build plan
 
 Repo: [Sanjay18bala/SunHacks9.0](https://github.com/Sanjay18bala/SunHacks9.0)
-Reviewed against `main` at `a810ae9` (2026-11-14) and open [PR #3](https://github.com/Sanjay18bala/SunHacks9.0/pull/3) (`dev` @ `509bd7b`).
+Open [PR #3](https://github.com/Sanjay18bala/SunHacks9.0/pull/3) (`dev`) — **do not merge as-is**. Landing route split is already on the TickSense branch with a real CTA; the fake login form stays out.
 
-This file is the work list. Do items in the order below. Later sections assume earlier ones are done. Each item says what is true today, the change, the files, and how you know it is finished.
+## Status (2026-11-15)
+
+| Item | State |
+| --- | --- |
+| P0.1 Landing without fake auth | Done — `/` → landing, `/market` → desk, one CTA |
+| P0.2 README + TickSense name | Done |
+| P0.3 `.env.example` + `npm test` | Done |
+| P0.4 Desk secret on scan/reset | Done |
+| P0.5 Deploy + domain | **Next** — needs Vercel login + Supabase env |
+| P0.6 Skip reasons + chart title | Done |
+| P0.7 No fake $10k flash | Done |
+| Brief API + Grok Bot skill | Done |
+| P&L vs $10k on desk | Done (simple) |
+| CI | Done (`.github/workflows/ci.yml`) |
+| P1.1 Source badges + persisted strategy | Next after deploy |
+| P1.5 Cron scan | After deploy + `SCANS_ENABLED` |
+| P2 Auth / per-user books | Only after shared demo is live |
+
+This file is the work list. Do items in the order below. Later sections assume earlier ones are done.
 
 ## What this project is
 
@@ -93,7 +111,7 @@ Do these before new features. They are the difference between a demo and a folde
 
 **Change the README to these sections, in this order.** Write it in plain sentences. No badge row.
 
-1. **TickSsense.** One paragraph. Paper trading for BTC, ETH, and SOL. Grok returns a score, a confidence, a catalyst sentence, and BUY / SELL / HOLD. The server, not the model, decides whether an order prints. Fills hit one shared demo portfolio. No broker, no real orders, no custody.
+1. **TickSense.** One paragraph. Paper trading for BTC, ETH, and SOL. Grok returns a score, a confidence, a catalyst sentence, and BUY / SELL / HOLD. The server, not the model, decides whether an order prints. Fills hit one shared demo portfolio. No broker, no real orders, no custody.
 2. **How a fill happens.** The four gates, matching `lib/trading.ts`:
    - confidence ≥ min confidence (default 0.75)
    - BUY only if the model said BUY and score ≥ buy threshold (default 0.70)
@@ -118,7 +136,7 @@ Do these before new features. They are the difference between a demo and a folde
 8. **Deploy.** Pointer to the live URL once P0.5 exists, plus "see Deploy below" with the Vercel steps from P0.5. Until the URL exists, this section says the production target and that memory mode must not be used there.
 9. **Limits, written down.** One shared book. Reset clears trades and restores $10,000, and leaves signals in place. Sample rows are not tagged in the database (fixed in P1.3). Cash is a float today (fixed in P2.2). Scans are unauthenticated today (fixed in P0.4).
 
-Also set `"name": "tickssense"` in `package.json`. The product name on the page and in the README is TickSsense.
+Also set `"name": "TickSense"` in `package.json`. The product name on the page and in the README is TickSense.
 
 On GitHub, set the repo description to the first sentence of the README, and set the homepage to the deployed URL when it exists. Topics: `nextjs`, `supabase`, `paper-trading`.
 
@@ -418,20 +436,18 @@ One persistent line in the footer of `/` and `/market`: paper trading, not inves
 
 ---
 
-## Suggested order for the team
+## Suggested order from here
 
 | Order | Item | Outcome |
 | --- | --- | --- |
-| 1 | P0.1 | PR #3's layout lands; the fake login does not |
-| 2 | P0.2, P0.3 | Repo explains itself; `npm test` runs |
-| 3 | P0.6, P0.7 | Demo tells the truth on first paint |
-| 4 | P0.4, then P0.5 | Public URL that cannot drain the xAI key |
-| 5 | Domain DNS | Same deployment, name you want on the slide |
-| 6 | P1.1, P1.2 | Reload-safe thresholds, sample badges, P&L |
-| 7 | P1.3, P1.4, P1.5 | Calmer network use, honest Grok labeling, optional cron |
-| 8 | P1.6, P1.7 | Screenshots and CI |
-| 9 | P2.1, then P2.2, then P2.3, P2.4 | Accounts, then the form, then a real ledger |
-| 10 | P3 | Polish that does not change the story |
+| 1 | **P0.5 Deploy** | Vercel + Supabase + `DESK_ADMIN_SECRET`; put URL in README + GitHub homepage |
+| 2 | Custom domain | Same build, name on the slide |
+| 3 | Close PR #3 | Comment: landing kept, auth deferred to P2; close without merging |
+| 4 | P1.1 | Persist strategy; Sample/Grok badge on signal cards |
+| 5 | P1.4, P1.5 | Honest retrieval label; optional cron with `SCANS_ENABLED` |
+| 6 | P1.6 | Two screenshots in README |
+| 7 | P2 only if needed | Per-user books first, then real auth form |
+| 8 | P3 | Locale, CoinGecko key, a11y markers |
 
 ## Explicitly out of scope until someone asks
 

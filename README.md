@@ -1,50 +1,44 @@
-# TickSsense
+# TickSense
 
-A paper-trading desk called TickSsense, for Bitcoin, Ethereum, and Solana. You set four gates. A scan asks Grok for the mood around each coin. The server, not the model, decides whether that mood becomes a paper order. Fills update one shared demo portfolio that starts at $10,000. There is no broker, no custody, and no real order.
+Paper-trading desk for Bitcoin, Ethereum, and Solana. You set four gates. A scan asks Grok for the mood around each coin. The server, not the model, decides whether that mood becomes a paper order. Fills update one shared demo portfolio that starts at $10,000. No broker, no custody, no real orders.
 
-This is a hackathon prototype. The book is shared until accounts land. Sample mode is a scripted sequence, not a live reading.
+Hackathon prototype. The book is shared until accounts land. Without an xAI key, scans walk a labeled sample sequence.
 
-## In plain terms
-
-The current build is a demo of a trading desk, not a brokerage.
-
-You press a button. Grok returns a number for how positive or negative the chatter is, how sure it is, a sentence about why, and a suggestion to buy, sell, or hold. Our code then checks your rules: is it sure enough, is the score past your line, and does the fake account have the cash or the coins? Only then does the paper portfolio move.
-
-What is wrong with the prototype, and what we are changing, is tracked in [Todo.md](Todo.md). The short version: everyone still shares one account, a scan only happens when someone clicks, and the page used to hide why an order was skipped. The direction is a public demo that tells the truth, then separate books once sign-in is real.
+**Live:** _deploy URL goes here after Vercel ships_ · Desk: `/market` · Brief: `GET /api/brief`
 
 ## How we use Cursor and Grok Bot
 
-Cursor is the coding agent for this repo. We use it to write the desk, keep the fill rules in `lib/trading.ts`, add tests around those rules, and open the work as separate pull requests. Cursor does not decide that a paper order should print. That decision stays in code the tests cover.
+**Cursor** is the coding agent for this repo. It writes the desk, keeps fill rules in `lib/trading.ts`, adds tests around those rules, and lands work on `main`. Cursor does not decide that a paper order should print — that decision stays in code the tests cover.
 
-Grok, inside the product, is the sentiment call. The scan route sends BTC, ETH, and SOL to the xAI API. Grok answers with a score, a confidence, a short catalyst, and BUY, SELL, or HOLD. If the Responses API is available, that call can search the web and X. A fallback chat call has no search, and the desk labels that fallback instead of calling it a live reading.
+**Grok (in product)** is the sentiment call. `POST /api/grok-scan` sends BTC, ETH, and SOL to the xAI API. Grok returns a score, confidence, catalyst sentence, and BUY / SELL / HOLD. The Responses API path can search the web and X; the chat fallback has no search and must not be labeled as a live reading.
 
-Grok Bot is a teammate in Cursor, separate from the xAI call. Its job in our workflow is a briefing, not a trade. The repeatable steps live in `.cursor/skills/paper-desk-briefing/SKILL.md`. The Bot reads `GET /api/brief` and posts a short note: cash, profit or loss versus $10,000, the latest signals, and the latest paper fills. It does not reset the book, does not call the scan route, and does not spend the xAI key. If the brief URL is down, it says so.
+**Grok Bot** is a teammate in Cursor, separate from the xAI spend. It runs the paper-desk briefing skill in `.cursor/skills/paper-desk-briefing/SKILL.md`: `GET /api/brief`, then posts cash, P&L versus $10,000, latest signals, and latest fills. It never calls scan or reset, and never spends the xAI key.
 
-To turn that into a Grok Bot routine, open a Bot and send:
+Routine prompt for a Grok Bot:
 
-> Your job is the TickSsense briefing. Read the skill "Paper desk briefing" in this repo and remember it. Every hour, GET {DEPLOY_URL}/api/brief and post a plain-language note in this chat: cash, profit or loss versus $10,000, whether sentiment is sample or live, what just filled, and what was skipped if the brief says so. If the URL fails, report the failure. Do not place trades, do not reset the portfolio, do not call POST /api/grok-scan, and do not spend the xAI key.
+> Your job is the TickSense briefing. Read the skill "Paper desk briefing" in this repo and remember it. Every hour, GET {DEPLOY_URL}/api/brief and post a plain-language note in this chat: cash, profit or loss versus $10,000, whether sentiment is sample or live, what just filled, and what was skipped if the brief says so. If the URL fails, report the failure. Do not place trades, do not reset the portfolio, do not call POST /api/grok-scan, and do not spend the xAI key.
 
-Replace `{DEPLOY_URL}` with the deployed origin. Save that process as a skill named "Paper desk briefing", then make it a routine on the hour. The routine runs in Grok Bot. The desk only supplies the brief.
+Replace `{DEPLOY_URL}` with the deployed origin.
 
 ## How a fill happens
 
 Defaults live in `types/database.ts`.
 
-- Confidence is at least 0.75.
-- A buy requires the model to say BUY and a score of at least 0.70.
-- A sell requires the model to say SELL and a score of −0.70 or lower.
-- HOLD never trades.
-- A buy needs enough cash. A sell needs enough of that coin. The default size is $500.
+- Confidence ≥ 0.75
+- Buy: model says BUY and score ≥ 0.70
+- Sell: model says SELL and score ≤ −0.70
+- HOLD never trades
+- Buy needs cash; sell needs coin; default size $500
 
-The model's suggestion is an input. Your thresholds can still reject it. The page shows the reason.
+The model's suggestion is an input. Your thresholds can still reject it. The page shows the skip reason.
 
 ## Demo script
 
-1. Open the site and read the front door. Start paper trading.
-2. Leave the default gates, or move them if you want to see a skip.
-3. Run one scan. Read the signal, then the fill or the skip reason, then the cash line.
+1. Open `/` and start paper trading.
+2. Leave the default gates, or move them to force a skip.
+3. Run one scan. Read the signal, the fill or skip reason, cash, and P&L versus $10,000.
 
-Prices move on their own from CoinGecko. Sentiment moves when someone runs a scan. With Supabase realtime configured, new rows show up on open desks without a refresh.
+Prices move from CoinGecko. Sentiment moves when someone runs a scan (or when cron is enabled). With Supabase realtime, new rows show on open desks without a refresh.
 
 ## Run locally
 
@@ -54,9 +48,9 @@ npm test
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The desk is at [http://localhost:3000/market](http://localhost:3000/market).
+Open [http://localhost:3000](http://localhost:3000). Desk: [http://localhost:3000/market](http://localhost:3000/market).
 
-Without `XAI_API_KEY`, scans walk a labeled sample sequence so the book, chart, and trade log still move. Without Supabase, the book stays in the memory of that Node process. Memory mode is for local development. A production deploy must use Supabase, because serverless instances do not share memory.
+Without `XAI_API_KEY`, scans use sample mode. Without Supabase, the book lives in that Node process's memory — fine for local, not for production.
 
 ## Environment
 
@@ -65,41 +59,40 @@ Copy `.env.example` to `.env.local`.
 | Variable | Required for | Read in |
 | --- | --- | --- |
 | `XAI_API_KEY` | Live Grok scans | `lib/grok.ts` |
-| `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_URL` | A stored book | `lib/supabase.ts` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server writes | `lib/supabase.ts`. Server only. Bypasses row level security. Never prefix it with `NEXT_PUBLIC_`. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY` | Browser realtime | Returned by `GET /api/config`. Public by design. It must not be able to insert, update, or delete. |
-| `DESK_ADMIN_SECRET` | Protecting scan and reset | `lib/desk-secret.ts`. Required when `VERCEL_ENV` is `production`. |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_URL` | Stored book | `lib/supabase.ts` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server writes | `lib/supabase.ts` (server only; never `NEXT_PUBLIC_`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_ANON_KEY` | Browser realtime | `GET /api/config` |
+| `DESK_ADMIN_SECRET` | Protecting scan and reset | `lib/desk-secret.ts` — required when `VERCEL_ENV=production` |
 
-Apply `supabase/schema.sql` in the Supabase SQL editor before the first stored scan. If the project already ran an older copy of that file, apply the `supabase/migrate-*.sql` files that match it. Realtime is enabled for `sentiment_signals` and `trades`.
-
-The anon key is public. The policies that ship with the schema allow it to read signals and trades on the shared demo. They do not allow it to write. Writes go through the service role on the server.
+Apply `supabase/schema.sql` in the Supabase SQL editor before the first stored scan. Realtime is enabled for `sentiment_signals` and `trades`.
 
 ## Deploy
 
-Production target is Vercel, with Supabase attached.
+Production target: Vercel + Supabase.
 
 1. Create a Supabase project and run `supabase/schema.sql`. Confirm `public.portfolio` has one row, id 1, cash 10000.
-2. Import this GitHub repo in Vercel. Framework preset Next.js. Production branch `main`.
-3. Set every variable from `.env.example` on Production and Preview. Preview shares the demo book during the hackathon.
-4. Deploy only after `DESK_ADMIN_SECRET` is set. Scan and reset return 401 without it.
-5. Open the `*.vercel.app` URL, run one scan, and refresh. The row should still be there.
+2. Import this GitHub repo in Vercel. Framework Next.js. Production branch `main`.
+3. Set every variable from `.env.example` on Production and Preview.
+4. Deploy only after `DESK_ADMIN_SECRET` is set. Bare `POST /api/grok-scan` must return 401.
+5. Open the `*.vercel.app` URL, run one scan, refresh — the row must still be there.
 6. Put that URL in this README and in the GitHub homepage field.
-7. Add a custom domain in Vercel after the `*.vercel.app` URL already works, then replace the link here. DNS does not block the demo.
+7. Add a custom domain in Vercel after the `*.vercel.app` URL already works.
 
-`VERCEL_ENV=production` refuses a scan when Supabase is missing, so a production instance cannot keep a private memory book. The desk secret is passed into the page so the buttons work. Anyone who can load the page can read it out of the payload. It stops a bare POST. It is not an account system.
+`VERCEL_ENV=production` refuses a scan when Supabase is missing. The desk secret stops a bare POST; it is not an account system.
 
 ## Limits
 
-- One shared book until per-user accounts ship. Reset clears trades, restores $10,000, and leaves signals in place.
-- Sample rows and live rows look the same after a refresh, because the signal row does not store which path produced it yet.
-- Cash columns are floating point. A fill is two writes. A crash between them can move cash without a trade row.
-- Scan and reset require `DESK_ADMIN_SECRET` in production. A request without that header gets 401 and does not call Grok.
-- Times on the chart use America/Phoenix.
-- CoinGecko's public API throttles. The server caches quotes for 15 seconds and history for 60 seconds.
+- One shared book until per-user accounts ship. Reset clears trades, restores $10,000, leaves signals.
+- Sample vs live is not yet stored per signal row (tracked in Todo.md).
+- Cash columns are floating point; a crash between portfolio update and trade insert can desync.
+- Times on the chart use America/Phoenix until locale polish lands.
+- CoinGecko public API throttles; quotes cache 15s, history 60s.
 
 ## Scripts
 
-- `npm run dev` starts the app.
-- `npm test` runs the trading, briefing, and desk-lock tests.
-- `npm run lint` runs ESLint.
-- `npm run build` produces the production build.
+- `npm run dev` — app
+- `npm test` — trading, briefing, desk-lock tests
+- `npm run lint` — ESLint
+- `npm run build` — production build
+
+Build plan and PR #3 pivot: [Todo.md](Todo.md).

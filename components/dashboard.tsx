@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient, type RealtimeChannel, type SupabaseClient } from "@supabase/supabase-js";
 import { LiveFeeds } from "@/components/live-feeds";
@@ -81,9 +82,11 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
   }, []);
 
   useEffect(() => {
-    const timer = window.setInterval(() => void refreshDesk(), 4_000);
+    // ponytail: with realtime, poll is only a miss-reconcile; without it, keep a tight loop
+    const ms = config?.supabase ? 30_000 : 4_000;
+    const timer = window.setInterval(() => void refreshDesk(), ms);
     return () => window.clearInterval(timer);
-  }, [refreshDesk]);
+  }, [refreshDesk, config?.supabase]);
 
   useEffect(() => {
     let active = true;
@@ -182,14 +185,17 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
   }
 
   const total = portfolio ? portfolioValue(portfolio, prices) : null;
+  const pnl = total == null ? null : Math.round((total - 10_000) * 100) / 100;
 
   return (
     <div className="min-h-full bg-[#070b14] text-slate-100">
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80">Paper trading</p>
-            <h1 className="text-2xl font-semibold tracking-tight">TickSsense</h1>
+            <Link href="/" className="text-xs font-medium uppercase tracking-[0.18em] text-cyan-300/80 hover:text-cyan-200">
+              TickSense · paper desk
+            </Link>
+            <h1 className="text-2xl font-semibold tracking-tight">Sentiment & paper ledger</h1>
           </div>
           <p className="max-w-xl text-sm text-slate-400">
             {config?.sentimentMode === "sample"
@@ -198,7 +204,9 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
             {config?.dataMode === "supabase"
               ? "Signals and trades are stored in Supabase."
               : "This server keeps the book in memory until Supabase is configured."}
-            {config?.supabase ? " Live inserts also arrive over Supabase Realtime." : ""}
+            {config?.supabase
+              ? " New rows show up immediately over Realtime; the desk reconciles every 30s."
+              : " Signals update when you run a scan. Prices update on their own."}
           </p>
         </header>
 
@@ -275,7 +283,7 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
         <section className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4">
           <h2 className="text-sm font-semibold tracking-wide text-slate-100">Portfolio & paper ledger</h2>
           {portfolio ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <Metric label="Cash" value={formatUsd(portfolio.cash_balance)} />
               {TICKERS.map((ticker) => (
                 <Metric
@@ -285,7 +293,15 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
                   detail={prices ? formatUsd(portfolio[holdingsKey(ticker)] * prices[ticker]) : undefined}
                 />
               ))}
-              <Metric label="Total value" value={total == null ? "—" : formatUsd(total)} />
+              <Metric
+                label="Total value"
+                value={total == null ? "—" : formatUsd(total)}
+                detail={
+                  pnl == null
+                    ? undefined
+                    : `P&L ${pnl >= 0 ? "+" : ""}${formatUsd(pnl)} vs $10,000 start`
+                }
+              />
             </div>
           ) : (
             <p className="mt-3 text-sm text-slate-500">Loading the book…</p>

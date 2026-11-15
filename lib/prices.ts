@@ -33,7 +33,7 @@ export async function getPrices(): Promise<Prices> {
 
 async function fetchCoinGecko(): Promise<Prices> {
   const response = await fetch(COINGECKO, {
-    headers: { accept: "application/json", "user-agent": "TickSsense/0.1" },
+    headers: { accept: "application/json", "user-agent": "TickSense/0.1" },
     cache: "no-store",
     signal: AbortSignal.timeout(12_000),
   });
@@ -69,7 +69,7 @@ export async function getPriceHistory(ticker: Ticker): Promise<PricePoint[]> {
   const response = await fetch(
     `https://api.coingecko.com/api/v3/coins/${COIN_IDS[ticker]}/market_chart?vs_currency=usd&days=1`,
     {
-      headers: { accept: "application/json", "user-agent": "TickSsense/0.1" },
+      headers: { accept: "application/json", "user-agent": "TickSense/0.1" },
       cache: "no-store",
       signal: AbortSignal.timeout(12_000),
     },
