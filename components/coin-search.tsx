@@ -9,10 +9,12 @@ type Result = Asset & { rank: number | null };
 
 export function CoinSearch({
   watchlist,
+  canAdd,
   onAdd,
   onOpen,
 }: {
   watchlist: Asset[];
+  canAdd: boolean;
   onAdd: (asset: Asset) => Promise<void>;
   onOpen: (symbol: string) => void;
 }) {
@@ -72,6 +74,8 @@ export function CoinSearch({
     const existing = onList(result.coingecko_id);
     if (existing) {
       onOpen(existing.symbol);
+    } else if (!canAdd) {
+      return;
     } else {
       setAdding(result.coingecko_id);
       try {
@@ -160,6 +164,10 @@ export function CoinSearch({
                 </div>
                 {existing ? (
                   <span className="text-xs font-medium text-muted">On your list</span>
+                ) : !canAdd ? (
+                  <span className="text-xs text-muted" title="Run the watchlist migration on Supabase to add coins">
+                    Adding soon
+                  </span>
                 ) : (
                   <span className="rounded-md bg-up/10 px-2.5 py-1 text-xs font-semibold text-up">
                     {adding === result.coingecko_id ? "Adding…" : "+ Add"}

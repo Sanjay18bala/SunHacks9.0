@@ -15,6 +15,32 @@ import {
   type Ticker,
 } from "@/types/database";
 
+// The watchlist and holdings tables come from supabase/migrations/002_watchlist_holdings.sql.
+// Until that migration runs on the shared Supabase project, this stays false: the desk sticks to
+// BTC/ETH/SOL and keeps balances in the original portfolio.btc/eth/sol_holdings columns.
+// After running the migration, flip it to true. (In-memory mode always has the full watchlist.)
+const WATCHLIST_TABLES = false;
+const LEGACY_COLUMNS: Record<string, "btc_holdings" | "eth_holdings" | "sol_holdings"> = {
+  BTC: "btc_holdings",
+  ETH: "eth_holdings",
+  SOL: "sol_holdings",
+};
+const WATCHLIST_OFF =
+  "Adding and removing coins is off until supabase/migrations/002_watchlist_holdings.sql runs on Supabase.";
+
+export function watchlistEnabled(): boolean {
+  return WATCHLIST_TABLES || !getServiceClient();
+}
+
+type Client = NonNullable<ReturnType<typeof getServiceClient>>;
+
+function writeHolding(client: Client, ticker: string, quantity: number) {
+  if (WATCHLIST_TABLES) return client.from("holdings").upsert({ symbol: ticker, quantity }, { onConflict: "symbol" });
+  const column = LEGACY_COLUMNS[ticker];
+  if (!column) throw new Error(`${ticker} has no balance column before the watchlist migration`);
+  return client.from("portfolio").update({ [column]: quantity }).eq("id", 1);
+}
+
 type Memory = {
   watchlist: Asset[];
   portfolio: Portfolio;
@@ -108,6 +134,7 @@ function asAsset(row: Record<string, unknown>): Asset {
 export async function listWatchlist(): Promise<Asset[]> {
   const client = getServiceClient();
   if (!client) return [...localState().watchlist];
+  if (!WATCHLIST_TABLES) return [...DEFAULT_WATCHLIST];
   const { data, error } = await client.from("watchlist").select("*").order("added_at", { ascending: true });
   assertOk(error, "Could not load the watchlist");
   return (data ?? []).map((row) => asAsset(row as Record<string, unknown>));
@@ -122,6 +149,7 @@ export async function addToWatchlist(input: unknown): Promise<Asset[]> {
   if (!isTicker(symbol)) throw new Error("symbol must be 1-15 letters or digits");
   if (!/^[a-z0-9-]{1,100}$/.test(coingecko_id)) throw new Error("coingecko_id is invalid");
   if (!name) throw new Error("name is required");
+  if (!watchlistEnabled()) throw new Error(WATCHLIST_OFF);
 
   return enqueue(async () => {
     const current = await listWatchlist();
@@ -144,6 +172,7 @@ export async function addToWatchlist(input: unknown): Promise<Asset[]> {
 
 export async function removeFromWatchlist(symbol: string): Promise<Asset[]> {
   const ticker = symbol.toUpperCase();
+  if (!watchlistEnabled()) throw new Error(WATCHLIST_OFF);
   return enqueue(async () => {
     const portfolio = await getPortfolio();
     if ((portfolio.holdings[ticker] ?? 0) > 0) {
@@ -187,6 +216,16 @@ export async function getPortfolio(): Promise<Portfolio> {
     const { portfolio } = localState();
     return { ...portfolio, holdings: { ...portfolio.holdings } };
   }
+  if (!WATCHLIST_TABLES) {
+    const { data, error } = await client.from("portfolio").select("*").eq("id", 1).maybeSingle();
+    assertOk(error, "Could not load portfolio");
+    if (!data) return insertDefaultPortfolio(client);
+    const row = data as Record<string, unknown>;
+    return asPortfolio(
+      row,
+      Object.entries(LEGACY_COLUMNS).map(([symbol, column]) => ({ symbol, quantity: row[column] })),
+    );
+  }
   const [{ data, error }, { data: holdingRows, error: holdingsError }] = await Promise.all([
     client.from("portfolio").select("id, cash_balance").eq("id", 1).maybeSingle(),
     client.from("holdings").select("symbol, quantity"),
@@ -197,7 +236,7 @@ export async function getPortfolio(): Promise<Portfolio> {
   return asPortfolio(data as Record<string, unknown>, (holdingRows ?? []) as Array<Record<string, unknown>>);
 }
 
-async function insertDefaultPortfolio(client: NonNullable<ReturnType<typeof getServiceClient>>): Promise<Portfolio> {
+async function insertDefaultPortfolio(client: Client): Promise<Portfolio> {
   const { data, error } = await client
     .from("portfolio")
     .insert({ id: 1, cash_balance: DEFAULT_PORTFOLIO.cash_balance })
@@ -219,11 +258,14 @@ export async function resetDemo(): Promise<Portfolio> {
     }
     const { error: deleteError } = await client.from("trades").delete().not("id", "is", null);
     assertOk(deleteError, "Could not clear trades");
-    const { error: holdingsError } = await client.from("holdings").delete().not("symbol", "is", null);
-    assertOk(holdingsError, "Could not clear holdings");
+    if (WATCHLIST_TABLES) {
+      const { error: holdingsError } = await client.from("holdings").delete().not("symbol", "is", null);
+      assertOk(holdingsError, "Could not clear holdings");
+    }
+    const legacyZeroes = WATCHLIST_TABLES ? {} : { btc_holdings: 0, eth_holdings: 0, sol_holdings: 0 };
     const { data, error } = await client
       .from("portfolio")
-      .upsert({ id: 1, cash_balance: DEFAULT_PORTFOLIO.cash_balance }, { onConflict: "id" })
+      .upsert({ id: 1, cash_balance: DEFAULT_PORTFOLIO.cash_balance, ...legacyZeroes }, { onConflict: "id" })
       .select("id, cash_balance")
       .single();
     assertOk(error, "Could not reset the portfolio");
@@ -276,9 +318,7 @@ async function persistSupabase(
     .update({ cash_balance: outcome.portfolio.cash_balance })
     .eq("id", 1);
   assertOk(updateError, "Could not update the portfolio");
-  const { error: holdingError } = await client
-    .from("holdings")
-    .upsert({ symbol: ticker, quantity: outcome.portfolio.holdings[ticker] ?? 0 }, { onConflict: "symbol" });
+  const { error: holdingError } = await writeHolding(client, ticker, outcome.portfolio.holdings[ticker] ?? 0);
   if (holdingError) {
     await client.from("portfolio").update({ cash_balance: current.cash_balance }).eq("id", 1);
     throw new Error(`Could not update holdings: ${holdingError.message}`);
@@ -291,9 +331,7 @@ async function persistSupabase(
     .single();
   if (tradeError) {
     await client.from("portfolio").update({ cash_balance: current.cash_balance }).eq("id", 1);
-    await client
-      .from("holdings")
-      .upsert({ symbol: ticker, quantity: current.holdings[ticker] ?? 0 }, { onConflict: "symbol" });
+    await writeHolding(client, ticker, current.holdings[ticker] ?? 0);
     throw new Error(`Could not save the trade: ${tradeError.message}`);
   }
   return {

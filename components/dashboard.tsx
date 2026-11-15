@@ -274,7 +274,12 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
             <Tick mood={mood} size={34} />
             <span className="hidden text-lg font-semibold tracking-tight sm:inline">TickSense</span>
           </Link>
-          <CoinSearch watchlist={watchlist} onAdd={addCoin} onOpen={setSelectedTicker} />
+          <CoinSearch
+            watchlist={watchlist}
+            canAdd={config?.watchlist !== false}
+            onAdd={addCoin}
+            onOpen={setSelectedTicker}
+          />
           <div className="ml-auto flex shrink-0 items-center gap-4">
             <span className="hidden text-xs text-muted xl:block" aria-live="polite">
               <span className="font-medium text-soft">Tick:</span> {tickLine}
@@ -316,7 +321,7 @@ export function Dashboard({ deskSecret = "" }: { deskSecret?: string }) {
               livePrice={prices?.[coinAsset.symbol]}
               signals={signals}
               scanning={scanning}
-              onRemove={watchlist.length > 1 ? () => void removeCoin(coinAsset.symbol) : null}
+              onRemove={config?.watchlist !== false && watchlist.length > 1 ? () => void removeCoin(coinAsset.symbol) : null}
             />
           ) : null}
           <SentimentChart

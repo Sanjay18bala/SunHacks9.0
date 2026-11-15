@@ -75,6 +75,8 @@ export type RealtimeConfig = {
   dataMode: "supabase" | "memory";
   sentimentMode: SentimentSource;
   supabase: { url: string; anonKey: string } | null;
+  /** False until the watchlist/holdings migration has run on Supabase. */
+  watchlist: boolean;
 };
 
 export const DEFAULT_PORTFOLIO: Portfolio = {
