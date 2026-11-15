@@ -19,7 +19,7 @@ import {
 // Until that migration runs on the shared Supabase project, this stays false: the desk sticks to
 // BTC/ETH/SOL and keeps balances in the original portfolio.btc/eth/sol_holdings columns.
 // After running the migration, flip it to true. (In-memory mode always has the full watchlist.)
-const WATCHLIST_TABLES = false;
+const WATCHLIST_TABLES = true;
 const LEGACY_COLUMNS: Record<string, "btc_holdings" | "eth_holdings" | "sol_holdings"> = {
   BTC: "btc_holdings",
   ETH: "eth_holdings",
