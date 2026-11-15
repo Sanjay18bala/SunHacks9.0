@@ -1,7 +1,5 @@
 import {
   DEFAULT_STRATEGY,
-  holdingsKey,
-  isTicker,
   type Portfolio,
   type Prices,
   type RecommendedAction,
@@ -53,11 +51,12 @@ export function parseStrategy(input: unknown): Strategy {
   return strategy;
 }
 
-export function parseTickers(input: unknown): Ticker[] {
+export function parseTickers(input: unknown, watchlist: Ticker[]): Ticker[] {
   const body = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  if (body.ticker == null || body.ticker === "") return ["BTC", "ETH", "SOL"];
-  if (!isTicker(body.ticker)) throw new Error("ticker must be BTC, ETH, or SOL");
-  return [body.ticker];
+  if (body.ticker == null || body.ticker === "") return [...watchlist];
+  const ticker = String(body.ticker).toUpperCase();
+  if (!watchlist.includes(ticker)) throw new Error(`${ticker} is not on the watchlist`);
+  return [ticker];
 }
 
 export function decideTrade(
@@ -106,7 +105,7 @@ export function planTrade(
     return { reason: `No live price for ${signal.ticker}` };
   }
 
-  const key = holdingsKey(signal.ticker);
+  const held = portfolio.holdings[signal.ticker] ?? 0;
   const coinAmount = roundCoin(strategy.tradeSizeUsd / price);
   if (coinAmount <= 0) return { reason: "Trade size is too small for the current price" };
 
@@ -125,15 +124,15 @@ export function planTrade(
         portfolio: {
           ...portfolio,
           cash_balance: roundCash(portfolio.cash_balance - strategy.tradeSizeUsd),
-          [key]: roundCoin(portfolio[key] + coinAmount),
+          holdings: { ...portfolio.holdings, [signal.ticker]: roundCoin(held + coinAmount) },
         },
       },
     };
   }
 
-  if (portfolio[key] + 1e-10 < coinAmount) {
+  if (held + 1e-10 < coinAmount) {
     return {
-      reason: `${signal.ticker} holdings ${portfolio[key]} cannot cover a $${strategy.tradeSizeUsd.toFixed(2)} sale`,
+      reason: `${signal.ticker} holdings ${held} cannot cover a $${strategy.tradeSizeUsd.toFixed(2)} sale`,
     };
   }
   const proceeds = roundCash(coinAmount * price);
@@ -146,7 +145,7 @@ export function planTrade(
       portfolio: {
         ...portfolio,
         cash_balance: roundCash(portfolio.cash_balance + proceeds),
-        [key]: roundCoin(portfolio[key] - coinAmount),
+        holdings: { ...portfolio.holdings, [signal.ticker]: roundCoin(held - coinAmount) },
       },
     },
   };

@@ -1,10 +1,14 @@
 import { analyzeTicker } from "@/lib/grok";
-import { getPortfolio, recordSignal } from "@/lib/repository";
+import { getPortfolio, listWatchlist, recordSignal } from "@/lib/repository";
 import { parseStrategy, parseTickers } from "@/lib/trading";
 import type { ScanResponse, ScanTickerResult, SentimentSource } from "@/types/database";
 
 export async function runScan(input: unknown): Promise<ScanResponse> {
-  const tickers = parseTickers(input);
+  const watchlist = await listWatchlist();
+  const tickers = parseTickers(
+    input,
+    watchlist.map((asset) => asset.symbol),
+  );
   const strategy = parseStrategy(input);
   await getPortfolio();
   const results: ScanTickerResult[] = [];
@@ -12,7 +16,8 @@ export async function runScan(input: unknown): Promise<ScanResponse> {
   for (const ticker of tickers) {
     let source: SentimentSource = "grok";
     try {
-      const analysis = await analyzeTicker(ticker);
+      const asset = watchlist.find((item) => item.symbol === ticker)!;
+      const analysis = await analyzeTicker(asset);
       source = analysis.source;
       const saved = await recordSignal(analysis.draft, strategy);
       results.push({

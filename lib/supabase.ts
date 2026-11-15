@@ -7,7 +7,12 @@ function supabaseUrl(): string | undefined {
 }
 
 function anonKey(): string | undefined {
-  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || undefined;
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    undefined
+  );
 }
 
 export function getServiceClient(): SupabaseClient | null {
