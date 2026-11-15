@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -14,9 +15,29 @@ import {
 import { formatScore, formatWhen } from "@/lib/format";
 import { isTicker, type SentimentSignal, type Ticker } from "@/types/database";
 
-const COLORS = { BTC: "#f7931a", ETH: "#8b9cff", SOL: "#2dd4bf" };
-const markerDot = { r: 4, cursor: "pointer" };
-const markerActive = { r: 7 };
+const COLORS: Record<Ticker, string> = { BTC: "#f7931a", ETH: "#8b9cff", SOL: "#2dd4bf" };
+
+function markerDot(ticker: Ticker, onSelect: (ticker: Ticker) => void) {
+  return function Dot(props: { cx?: number; cy?: number }) {
+    const { cx, cy } = props;
+    if (cx == null || cy == null || Number.isNaN(cx) || Number.isNaN(cy)) return <g />;
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={7}
+        fill={COLORS[ticker]}
+        stroke="#020617"
+        strokeWidth={2}
+        style={{ cursor: "pointer" }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onSelect(ticker);
+        }}
+      />
+    );
+  };
+}
 
 export function SentimentChart({
   signals,
@@ -29,6 +50,14 @@ export function SentimentChart({
   sellThreshold: number;
   onSelect: (ticker: Ticker) => void;
 }) {
+  const dots = useMemo(
+    () => ({
+      BTC: markerDot("BTC", onSelect),
+      ETH: markerDot("ETH", onSelect),
+      SOL: markerDot("SOL", onSelect),
+    }),
+    [onSelect],
+  );
   const data = [...signals]
     .reverse()
     .map((signal) => ({
@@ -75,9 +104,9 @@ export function SentimentChart({
               />
               <ReferenceLine y={buyThreshold} stroke="#34d399" strokeDasharray="4 4" />
               <ReferenceLine y={sellThreshold} stroke="#fb7185" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="BTC" stroke={COLORS.BTC} strokeWidth={2} connectNulls dot={markerDot} activeDot={markerActive} onClick={() => onSelect("BTC")} />
-              <Line type="monotone" dataKey="ETH" stroke={COLORS.ETH} strokeWidth={2} connectNulls dot={markerDot} activeDot={markerActive} onClick={() => onSelect("ETH")} />
-              <Line type="monotone" dataKey="SOL" stroke={COLORS.SOL} strokeWidth={2} connectNulls dot={markerDot} activeDot={markerActive} onClick={() => onSelect("SOL")} />
+              <Line type="monotone" dataKey="BTC" stroke={COLORS.BTC} strokeWidth={2} connectNulls dot={dots.BTC} activeDot={dots.BTC} />
+              <Line type="monotone" dataKey="ETH" stroke={COLORS.ETH} strokeWidth={2} connectNulls dot={dots.ETH} activeDot={dots.ETH} />
+              <Line type="monotone" dataKey="SOL" stroke={COLORS.SOL} strokeWidth={2} connectNulls dot={dots.SOL} activeDot={dots.SOL} />
             </LineChart>
           </ResponsiveContainer>
         </div>
